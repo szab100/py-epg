@@ -1,0 +1,27 @@
+[tool.poetry]
+name = "py-epg"
+version = "0.1.0"
+description = ""
+authors = ["Szabolcs Fruhwald <mail@szab100.com>"]
+
+[tool.poetry.dependencies]
+python = "^3.7"
+lxml = "^4.6.3"
+requests = "^2.26.0"
+beautifulsoup4 = "^4.10.0"
+python-xmltv = "^1.4.3"
+fake-useragent = "^0.1.11"
+python-dateutil = "^2.8.2"
+PyYAML = "^6.0"
+py-xmltv = "^1.0.8"
+roman = "^3.3"
+
+[tool.poetry.dev-dependencies]
+poetry = "^1.1.11"
+
+[tool.poetry.scripts]
+epg = "py_epg.main:main"
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
