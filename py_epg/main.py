@@ -8,7 +8,7 @@ import sys
 import time
 from collections import defaultdict
 from datetime import date, timedelta
-from multiprocessing.dummy import Pool
+from multiprocessing import Pool
 from pprint import pprint
 from typing import Dict, List, Set, Tuple
 
@@ -19,6 +19,7 @@ from lxml import etree as ET
 from xmltv import xmltv_helpers
 from xmltv.models import Channel, Programme, Tv
 
+from py_epg.common.multiprocess_helper import setup_ltree_pickling
 from py_epg.common.epg_scraper import EpgScraper
 from py_epg.common.types import ChannelKey
 from py_epg.scrapers import *
@@ -38,6 +39,7 @@ class PyEPG:
         self._args = self._parse_args()
         self._config = self._read_config()
         self._epg_scrapers = self._init_epg_scrapers()
+        setup_ltree_pickling()
         self._pool = Pool(CHANNEL_WORKER_POOL_SIZE)
 
     def run(self):
@@ -122,6 +124,14 @@ class PyEPG:
         requiredArgs.add_argument(
             "-c", "--config", help="Path to py_epg.xml file", required=True)
         return parser.parse_args()
+    
+    def __getstate__(self):
+        self_dict = self.__dict__.copy()
+        del self_dict['_pool']
+        return self_dict
+
+    def __setstate__(self, state):
+        self.__dict__.update(state)
 
 
 def main(args=None):
