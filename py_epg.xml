@@ -5,8 +5,6 @@
   <user-agent>Mozilla/5.0 (Macintosh; Intel Mac OS X 10_10_1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/37.0.2062.124 Safari/537.36</user-agent>
   <timespan keeppastdays="2">7</timespan>
 
-<!-- <channel update="i" site="m.musor.tv" site_id="RTL" xmltv_id="RTL-KLUB.MUSOR.TV">RTL Klub (HD)</channel> -->
-
   <channel update="i" site="m.musor.tv" site_id="M1" xmltv_id="M1.MUSOR.TV">M1 (HD)</channel>
   <channel update="i" site="m.musor.tv" site_id="M2" xmltv_id="M2.MUSOR.TV">M2 / Petőfi (HD)</channel>
   <channel update="i" site="m.musor.tv" site_id="DUNA" xmltv_id="DUNA.MUSOR.TV">Duna TV (HD)</channel>

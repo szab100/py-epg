@@ -1,1 +1,7 @@
 .venv
+.vscode
+*.log
+*.xml
+__pycache__
+*.bak
+dist/

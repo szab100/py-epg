@@ -12,8 +12,8 @@ from dateutil import tz
 from dateutil.parser import parse
 from py_epg.common.epg_scraper import EpgScraper
 from py_epg.common.utils import clean_text
-from xmltv.models import (Actor, Channel, Credits, Desc, DisplayName, Icon,
-                          Programme, SubTitle, Title, EpisodeNum)
+from xmltv.models import (Actor, Channel, Credits, Desc, DisplayName,
+                          EpisodeNum, Icon, Programme, SubTitle, Title)
 
 RE_MIXED_DESCRIPTION = re.compile(
     # Group 1 (opt): (title in orig lang)
@@ -60,7 +60,7 @@ class MusorTvMobile(EpgScraper):
         return Channel(
             id=channel_id,
             display_name=[DisplayName(content=[name])],
-            icon=[Icon(src=channel_logo_src)])
+            icon=Icon(src=channel_logo_src) if channel_logo_src else None)
 
     def fetch_programs(self, channel: Channel, channel_site_id: str, fetch_date: date) -> List[Programme]:
         date_str = fetch_date.strftime("%Y.%m.%d")
@@ -178,12 +178,15 @@ class MusorTvMobile(EpgScraper):
                         # sub-title + description
                         program.sub_title.append(
                             SubTitle(content=[parts[0].strip()]))
-                        program.desc.append(
-                            Desc(content=['\n'.join(parts[1:]).strip()]))
+                        desc = '\n'.join(parts[1:]).strip()
+                        if desc:
+                            program.desc.append(Desc(content=[desc]))
                     else:
                         # description only
-                        program.desc.append(
-                            Desc(content=[result.group(2).strip()]))
+                        desc = result.group(2).strip()
+                        if desc:
+                            program.desc.append(
+                                Desc(content=[desc]))
                         # director, cast
                 if result.group(3) or result.group(4):
                     separator = re.compile('[,;]+ ')

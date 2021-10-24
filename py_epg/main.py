@@ -49,12 +49,21 @@ class PyEPG:
         channels = []
         programs = []
         for chan_key, prgs in sorted(data.items(),
-                                            key=lambda item: item[0].id):
+                                     key=lambda item: item[0].id):
             print(chan_key)
             channels.append(chan_key.channel)
-            programs.append(
+            programs.extend(
                 sorted(prgs, key=lambda prg: prg and prg.start))
+        self._post_process_programs(programs)
         return Tv(channels, programs, date=date.today().strftime('%Y%m%d%H%M%S'), generator_info_name='py_epg')
+
+    def _post_process_programs(self, programs: List[Programme]):
+        for i, program in enumerate(programs):
+            # Set stop times
+            if i < len(programs) - 1 and programs[i + 1].channel == program.channel:
+                program.stop = programs[i + 1].start
+            else:
+                program.stop = f'{program.start[:8]}235959{program.start[14:]}'
 
     def _write_xmltv(self, tv: Tv):
         xmltv_out_file = pathlib.Path(self._config.find('filename').text)
@@ -68,7 +77,6 @@ class PyEPG:
         for i, (chan_key, chan_progs) in enumerate(channel_programs):
             programs_by_channel[chan_key].extend(chan_progs)
         return programs_by_channel
-
 
     def _fetch_channel(self, chan) -> Tuple[ChannelKey, List[Programme]]:
         site = chan.attrib['site']

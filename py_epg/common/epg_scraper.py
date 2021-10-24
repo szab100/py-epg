@@ -38,7 +38,8 @@ class EpgScraper(ABC):
         Returns a Dict with all the programmes for the given channel and day.
 
         Notes:
-            - All dates must be in local ISO8601 format with proper timezone info.
+            - All dates must be in local xmltv format with timezone info.
+            - Stop times are automatically set from programs' start times.
             - The order of returned programmes is irrelevant, they will get sorted by start time.
 
         Parameters:
