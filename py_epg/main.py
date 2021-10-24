@@ -26,7 +26,7 @@ from py_epg.scrapers import *
 
 LOG = logging.getLogger(__name__)
 
-CHANNEL_WORKER_POOL_SIZE = 8
+CHANNEL_WORKER_POOL_SIZE = 1
 EPG_DAYS = 7
 PROXY = 'http://172.18.0.20:3128'
 

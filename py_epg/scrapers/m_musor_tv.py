@@ -165,15 +165,18 @@ class MusorTvMobile(EpgScraper):
                 program.desc.append(Desc(content=[prg_mixed_desc]))
                 return
 
+            # pprint(prg_mixed_desc)
             result = RE_MIXED_DESCRIPTION.search(prg_mixed_desc)
             if result and len(result.groups()):
+                # pprint(result.groups())
                 # title in orig lang
                 if result.group(1):
                     program.title.append(
                         Title(content=[result.group(1)], lang='en'))
 
                 if result.group(2):
-                    parts = result.group(2).split('\n\n')
+                    content = result.group(2).strip()
+                    parts = content.split('\n\n')
                     if len(parts) >= 2:
                         # sub-title + description
                         program.sub_title.append(
@@ -181,13 +184,10 @@ class MusorTvMobile(EpgScraper):
                         desc = '\n'.join(parts[1:]).strip()
                         if desc:
                             program.desc.append(Desc(content=[desc]))
-                    else:
+                    elif content:
                         # description only
-                        desc = result.group(2).strip()
-                        if desc:
-                            program.desc.append(
-                                Desc(content=[desc]))
-                        # director, cast
+                        program.desc.append(Desc(content=[content]))
+                # director, cast
                 if result.group(3) or result.group(4):
                     separator = re.compile('[,;]+ ')
                     credits = Credits()
