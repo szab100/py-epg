@@ -96,12 +96,10 @@
   <channel update="i" site="m.musor.tv" site_id="ZENEBUTIK" xmltv_id="ZENEBUTIK.MUSOR.TV">Zenebutik TV</channel>
   <channel update="i" site="m.musor.tv" site_id="MEZZO" xmltv_id="MEZZO.MUSOR.TV">Mezzo</channel>
   <channel update="i" site="m.musor.tv" site_id="CNN" xmltv_id="CNN.MUSOR.TV">CNN</channel>
-
   <channel update="i" site="m.musor.tv" site_id="FIXTV" xmltv_id="FIXTV.MUSOR.TV">FIX TV (HD)</channel>
   <channel update="i" site="m.musor.tv" site_id="HEGYVIDEK_TV" xmltv_id="HEGYVIDEK-TV.MUSOR.TV">Hegyvidék TV</channel>
   <channel update="i" site="m.musor.tv" site_id="HETI_TV" xmltv_id="HETI-TV.MUSOR.TV">Heti TV</channel>
   <channel update="i" site="m.musor.tv" site_id="MR1" xmltv_id="MR1.MUSOR.TV">MR1 - Kossuth Rádió</channel>
   <channel update="i" site="m.musor.tv" site_id="MR2" xmltv_id="MR2.MUSOR.TV">MR2 - Petőfi Rádió</channel>
   <channel update="i" site="m.musor.tv" site_id="MR3" xmltv_id="MR3.MUSOR.TV">MR3 - Bartók Rádió</channel>
-
 </settings>
