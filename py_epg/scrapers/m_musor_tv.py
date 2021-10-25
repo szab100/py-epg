@@ -34,10 +34,11 @@ RE_SINGLE_EPISODE = re.compile("([0-9]+)\.")
 
 
 class MusorTvMobile(EpgScraper):
-    def __init__(self, proxy=None):
-        super().__init__(name=__name__, proxy=proxy)
+    def __init__(self, proxy=None, user_agent=None):
+        super().__init__(name=__name__, proxy=proxy, user_agent=user_agent)
         self._site_id = "m.musor.tv"
         self._base_url = 'https://m.musor.tv'
+        self._page_encoding = 'utf-8'
         self._chan_id_tpl = Template('$chan_id.' + self._site_id)
         self._day_url_tpl = Template(
             self._base_url + '/napi/tvmusor/$chan_site_id/$date')
@@ -51,8 +52,7 @@ class MusorTvMobile(EpgScraper):
         today_str = date.today().strftime("%Y.%m.%d")
         url = self._day_url_tpl.substitute(
             chan_site_id=chan_site_id, date=today_str)
-        page = self._http.get(url)
-        soup = BeautifulSoup(page.content, "html.parser")
+        soup = self._get_soup(url)
         channel_id = self._chan_id_tpl.substitute(chan_id=chan_site_id).upper()
         channel_logo = soup.select_one('img.channelheaderlink')
         channel_logo_src = self._base_url + \
@@ -64,11 +64,11 @@ class MusorTvMobile(EpgScraper):
 
     def fetch_programs(self, channel: Channel, channel_site_id: str, fetch_date: date) -> List[Programme]:
         date_str = fetch_date.strftime("%Y.%m.%d")
-        prg_page = self._get_soup(self._day_url_tpl.substitute(
+        channel_daily_progs_page = self._get_soup(self._day_url_tpl.substitute(
             chan_site_id=channel_site_id, date=date_str))
         programs_selector = 'section[itemscope]'
         programs = []
-        for prg in prg_page.select(programs_selector):
+        for prg in channel_daily_progs_page.select(programs_selector):
             program = self._get_program(channel_site_id, fetch_date, prg)
             if program:
                 programs.append(program)
@@ -99,7 +99,7 @@ class MusorTvMobile(EpgScraper):
         self._set_prg_fields_from_mixed_description(program, prg_details_page)
 
         self._log.trace(
-            f'New program fetched for channel: {channel_id} - {prg_title}')
+            f'New program CH: {channel_id} ENC: {prg.original_encoding} P: {prg_title}')
         return program
 
     def _set_prg_start(self, program, prg):
@@ -202,4 +202,4 @@ class MusorTvMobile(EpgScraper):
 
     def _get_soup(self, url) -> BeautifulSoup:
         page = self._http.get(url)
-        return BeautifulSoup(page.content, "html.parser")
+        return BeautifulSoup(page.text, "html.parser")

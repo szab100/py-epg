@@ -19,16 +19,13 @@ from lxml import etree as ET
 from xmltv import xmltv_helpers
 from xmltv.models import Channel, Programme, Tv
 
-from py_epg.common.multiprocess_helper import setup_ltree_pickling
 from py_epg.common.epg_scraper import EpgScraper
+from py_epg.common.multiprocess_helper import setup_ltree_pickling
 from py_epg.common.types import ChannelKey
 from py_epg.scrapers import *
 
 LOG = logging.getLogger(__name__)
-
-CHANNEL_WORKER_POOL_SIZE = 1
-EPG_DAYS = 7
-PROXY = 'http://172.18.0.20:3128'
+DEFAULT_POOL_SIZE = 1
 
 
 class PyEPG:
@@ -40,7 +37,9 @@ class PyEPG:
         self._config = self._read_config()
         self._epg_scrapers = self._init_epg_scrapers()
         setup_ltree_pickling()
-        self._pool = Pool(CHANNEL_WORKER_POOL_SIZE)
+        pool_size = self._config.find('pool-size')
+        self._pool = Pool(int(pool_size.text)
+                          if pool_size is not None else DEFAULT_POOL_SIZE)
 
     def run(self):
         data = self._fetch_data()
@@ -52,7 +51,6 @@ class PyEPG:
         programs = []
         for chan_key, prgs in sorted(data.items(),
                                      key=lambda item: item[0].id):
-            print(chan_key)
             channels.append(chan_key.channel)
             programs.extend(
                 sorted(prgs, key=lambda prg: prg and prg.start))
@@ -93,9 +91,10 @@ class PyEPG:
 
         channel = scraper.fetch_channel(chan_site_id, chan_name)
         today = date.today()
+        days = int(self._config.find('timespan').text)
 
         programs = []
-        for i in range(EPG_DAYS):
+        for i in range(days):
             fetch_date = today + timedelta(days=i)
             day_programs = scraper.fetch_programs(
                 channel, chan_site_id, fetch_date)
@@ -106,8 +105,11 @@ class PyEPG:
     def _init_epg_scrapers(self) -> Dict[str, EpgScraper]:
         result = {}
         implementations = EpgScraper.__subclasses__()
+        proxy = self._config.find('proxy')
+        user_agent = self._config.find('user-agent')
         for scraper_class in implementations:
-            obj = scraper_class(proxy=PROXY)
+            obj = scraper_class(proxy=proxy.text if proxy is not None else None,
+                                user_agent=user_agent.text if user_agent is not None else None)
             result[obj.site_name()] = obj
         return result
 
@@ -124,7 +126,7 @@ class PyEPG:
         requiredArgs.add_argument(
             "-c", "--config", help="Path to py_epg.xml file", required=True)
         return parser.parse_args()
-    
+
     def __getstate__(self):
         self_dict = self.__dict__.copy()
         del self_dict['_pool']

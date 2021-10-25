@@ -18,10 +18,10 @@ UA = UserAgent()
 class EpgScraper(ABC):
     """Abstract class providing simple methods to fetch XMLTV data from an EPG website."""
 
-    def __init__(self, name: str, proxy=None):
+    def __init__(self, name: str, proxy=None, user_agent=None):
         super().__init__()
         self._log = logging.getLogger(name)
-        self._user_agent = UA.random
+        self._user_agent = user_agent if user_agent else UA.random
         self._http = get_http_session(user_agent=self._user_agent, proxy=proxy)
 
     @abstractmethod

@@ -1,9 +1,12 @@
 <?xml version="1.0"?>
 <settings>
   <filename>epg.xml</filename>
-  <proxy>172.18.0.20:3128</proxy>
-  <user-agent>Mozilla/5.0 (Macintosh; Intel Mac OS X 10_10_1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/37.0.2062.124 Safari/537.36</user-agent>
-  <timespan keeppastdays="2">7</timespan>
+  <proxy>http://172.18.0.20:3128</proxy>
+  <!-- leave empty to use randomly selected fake user_agent values -->
+  <user-agent></user-agent>
+  <!-- # of days to fetch programs for each channel -->
+  <timespan>7</timespan>
+  <pool-size>8</pool-size>
 
   <channel update="i" site="m.musor.tv" site_id="M1" xmltv_id="M1.MUSOR.TV">M1 (HD)</channel>
   <channel update="i" site="m.musor.tv" site_id="M2" xmltv_id="M2.MUSOR.TV">M2 / Petőfi (HD)</channel>
