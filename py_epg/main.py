@@ -160,10 +160,10 @@ class PyEPG:
             prog='py_epg',
             description='A simple, multi-threaded, modular EPG grabber written in Python')
         parser.add_argument(
-            "-p", "--progress-bar", help="Show a progress bar. Default: True",
-            default=True, type=argparse_str2bool, nargs='?', const=True)
+            "-p", "--progress-bar", help="Show progress bars. Default: False",
+            default=False, type=argparse_str2bool, nargs='?', const=True)
         parser.add_argument(
-            "-q", "--quiet", help="Quiet mode (no progress-bar, etc). Default: False",
+            "-q", "--quiet", help="Quiet mode (no progress-bar, no console logs). Default: False",
             default=False, type=argparse_str2bool, nargs='?', const=True)
         requiredArgs = parser.add_argument_group('required arguments')
         requiredArgs.add_argument(
@@ -172,7 +172,7 @@ class PyEPG:
 
         if args.quiet:
             args.progress_bar = False
-        if args.progress_bar:
+        if args.progress_bar or args.quiet:
             # Disable console logging if progress-bar is enabled
             logging.getLogger().removeHandler(logging.getLogger().handlers[0])
         return args

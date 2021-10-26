@@ -31,7 +31,7 @@
     - Make sure there is a corresponding site scraper implementation in [py_epg/scrapers](https://github.com/szab100/py-epg/tree/main/py_epg/scrapers) for each channels ('site' attribute).
 3. Run:
     ```sh
-    $ python3 -m py_epg -c </path/to/your/py_epg.xml>
+    $ python3 -m py_epg -c </path/to/your/py_epg.xml> -p
     ```
 
     ..or see all supported flags:
