@@ -26,12 +26,13 @@
 
 4. Run:
       ```sh
+      cd py_epg
       poetry run epg -c py_epg.xml
       ```
 ## Usage
 
 ```sh
-user@host:~/git/py-epg$ poetry run epg -h
+$ poetry run epg -h
 usage: epg [-h] [-p [PROGRESS_BAR]] [-q [QUIET]] -c CONFIG
 
 A simple, multi-threaded, modular EPG grabber written in Python
