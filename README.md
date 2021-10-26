@@ -4,6 +4,15 @@
 
 * 📺 Scrapes various TV Program websites and saves programs in XMLTV format.
 * 🧩 Simply extend [EpgScraper](https://github.com/szab100/py_epg/blob/main/py_epg/common/epg_scraper.py) to grab EPG from your favorite TV site (requires basic Python skills).
+* 🤖 The framework provides the rest:
+    * [Beautiful Soup](https://www.crummy.com/software/BeautifulSoup/bs4/doc) - easily search & extract data from html elements 
+    * multi-processing
+    * config management
+    * logging
+    * build & write XMLTV (with auto-generated fields, eg 'stop')
+    * proxy server support
+    * auto http/s retries
+    * random fake user_agents
 * 🚀 Save time by fetching channels in parallel (caution: use proxy server(s) to avoid getting blacklisted)!
 
 <p align="center">
