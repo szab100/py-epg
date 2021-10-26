@@ -154,6 +154,7 @@ class PyEPG:
     def _parse_args(self):
         # Initialize parser
         parser = argparse.ArgumentParser(
+            prog='py_epg',
             description='A simple, multi-threaded, modular EPG grabber written in Python')
         parser.add_argument(
             "-p", "--progress-bar", help="Show a progress bar. Default: True",
