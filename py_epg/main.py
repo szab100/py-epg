@@ -6,7 +6,6 @@ import os
 import pathlib
 import sys
 import time
-import tqdm
 from collections import defaultdict
 from datetime import date, timedelta
 from multiprocessing import Pool, current_process
@@ -14,6 +13,7 @@ from pprint import pprint
 from typing import Dict, List, Set, Tuple
 
 import requests
+import tqdm
 import xmltv
 from dateutil.parser import parse
 from lxml import etree as ET
@@ -26,7 +26,6 @@ from py_epg.common.types import ChannelKey
 from py_epg.common.utils import argparse_str2bool
 from py_epg.scrapers import *
 
-LOG = logging.getLogger(__name__)
 DEFAULT_POOL_SIZE = 1
 PBAR_NAME_COL_WIDTH = 15
 
@@ -35,14 +34,15 @@ class PyEPG:
     """Main class of PyEPG"""
 
     def __init__(self):
-        self._log = logging.getLogger(__name__)
         self._args = self._parse_args()
+        self._log = logging.getLogger(__name__)
         self._config = self._read_config()
         self._epg_scrapers = self._init_epg_scrapers()
         setup_ltree_pickling()
         pool_size = self._config.find('pool-size')
-        self._pool = Pool(int(pool_size.text)
-                          if pool_size is not None else DEFAULT_POOL_SIZE)
+        self._pool_size = int(
+            pool_size.text) if pool_size is not None else DEFAULT_POOL_SIZE
+        self._pool = Pool(self._pool_size)
 
     def run(self):
         data = self._fetch_data()
@@ -77,13 +77,14 @@ class PyEPG:
         pbar_id = 'All Channels'
         programs_by_channel = defaultdict(list)
         channels = self._config.findall('channel')
+        self._log.info(
+            f'Start grabbing programs for {len(channels)} channels using {self._pool_size} workers.')
         bar_unit_format = 'Progs: 0'
         bar_format = "{l_bar} {bar}|Chan: {n_fmt:>3}/{total_fmt:<3} [T:{elapsed} ETA:{remaining:<5}]"
         channel_programs = tqdm.tqdm(self._pool.imap_unordered(self._fetch_channel, channels, chunksize=1),
                                      total=len(channels),
                                      disable=not self._args.progress_bar,
                                      position=0,
-                                     unit=bar_unit_format.format(0),
                                      dynamic_ncols=True,
                                      colour='cyan',
                                      bar_format=bar_format,
@@ -91,12 +92,12 @@ class PyEPG:
                                      desc=f'{pbar_id: >{PBAR_NAME_COL_WIDTH}}')
         for (chan_key, chan_progs) in channel_programs:
             programs_by_channel[chan_key].extend(chan_progs)
-            prog_count = sum([len(listElem)
-                             for listElem in programs_by_channel.values()])
-            channel_programs.set_postfix({'T': prog_count})
-            channel_programs.unit = bar_unit_format.format(
-                len(programs_by_channel))
-
+            self._log.info(
+                f'{chan_key.id}: {len(programs_by_channel[chan_key])} programs successfully grabbed.')
+        prog_count = sum([len(listElem)
+                         for listElem in programs_by_channel.values()])
+        self._log.info(
+            f'Grabbing completed! A total of {prog_count} programs fetched.')
         return programs_by_channel
 
     def _fetch_channel(self, chan) -> Tuple[ChannelKey, List[Programme]]:
@@ -135,6 +136,8 @@ class PyEPG:
                 channel, chan_site_id, fetch_date)
             key = ChannelKey(channel.id, channel)
             programs.extend(day_programs)
+            self._log.debug(
+                f'{chan_site_id}: grabbed {len(day_programs)} programs for date {fetch_date}.')
         return key, programs
 
     def _init_epg_scrapers(self) -> Dict[str, EpgScraper]:
@@ -169,6 +172,9 @@ class PyEPG:
 
         if args.quiet:
             args.progress_bar = False
+        if args.progress_bar:
+            # Disable console logging if progress-bar is enabled
+            logging.getLogger().removeHandler(logging.getLogger().handlers[0])
         return args
 
     def __getstate__(self):

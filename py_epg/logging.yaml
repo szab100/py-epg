@@ -6,6 +6,7 @@ formatters:
     format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 
 handlers:
+  # CONSOLE LOGGER HAS TO BE THE FIRST ONE - DO NOT RE-ORDER!
   console:
     class: logging.StreamHandler
     level: TRACE
@@ -34,9 +35,7 @@ loggers:
   urllib3.connectionpool:
     level: ERROR
   py_epg:
-    level: INFO
-    handlers: [console]
-    propagate: no
+    level: DEBUG
 
 root:
   level: INFO
