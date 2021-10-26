@@ -3,8 +3,8 @@
 **py_epg** is an easy to use, modular, multi-process EPG grabber written in Python.
 
 * 📺 Scrapes various TV Program websites and saves programs in XMLTV format.
-* 🧩 Simply implement the [EpgScraper](https://github.com/szab100/py_epg/blob/main/py_epg/common/epg_scraper.py) interface to grab EPG from your favorite TV programs site (requires basic Python skills).
-* 🚀 Save time by fetching channels in parallel (caution: use one or more proxy servers to avoid getting blacklisted)!
+* 🧩 Simply extend [EpgScraper](https://github.com/szab100/py_epg/blob/main/py_epg/common/epg_scraper.py) to grab EPG from your favorite TV site (requires basic Python skills).
+* 🚀 Save time by fetching channels in parallel (caution: use proxy server(s) to avoid getting blacklisted)!
 
 <p align="center">
   <img src="https://raw.githubusercontent.com/szab100/py_epg/main/py_epg.gif">
