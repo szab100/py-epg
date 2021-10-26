@@ -6,9 +6,10 @@ import os
 import pathlib
 import sys
 import time
+import tqdm
 from collections import defaultdict
 from datetime import date, timedelta
-from multiprocessing import Pool
+from multiprocessing import Pool, current_process
 from pprint import pprint
 from typing import Dict, List, Set, Tuple
 
@@ -22,10 +23,12 @@ from xmltv.models import Channel, Programme, Tv
 from py_epg.common.epg_scraper import EpgScraper
 from py_epg.common.multiprocess_helper import setup_ltree_pickling
 from py_epg.common.types import ChannelKey
+from py_epg.common.utils import argparse_str2bool
 from py_epg.scrapers import *
 
 LOG = logging.getLogger(__name__)
 DEFAULT_POOL_SIZE = 1
+PBAR_NAME_COL_WIDTH = 15
 
 
 class PyEPG:
@@ -71,11 +74,29 @@ class PyEPG:
         xmltv_helpers.write_file_from_xml(xmltv_out_file, tv)
 
     def _fetch_data(self) -> Dict[ChannelKey, List[Programme]]:
+        pbar_id = 'All Channels'
         programs_by_channel = defaultdict(list)
         channels = self._config.findall('channel')
-        channel_programs = self._pool.map(self._fetch_channel, channels)
-        for i, (chan_key, chan_progs) in enumerate(channel_programs):
+        bar_unit_format = 'Progs: 0'
+        bar_format = "{l_bar} {bar}|Chan: {n_fmt:>3}/{total_fmt:<3} [T:{elapsed} ETA:{remaining:<5}]"
+        channel_programs = tqdm.tqdm(self._pool.imap_unordered(self._fetch_channel, channels, chunksize=1),
+                                     total=len(channels),
+                                     disable=not self._args.progress_bar,
+                                     position=0,
+                                     unit=bar_unit_format.format(0),
+                                     dynamic_ncols=True,
+                                     colour='cyan',
+                                     bar_format=bar_format,
+                                     postfix={'T': len(programs_by_channel)},
+                                     desc=f'{pbar_id: >{PBAR_NAME_COL_WIDTH}}')
+        for (chan_key, chan_progs) in channel_programs:
             programs_by_channel[chan_key].extend(chan_progs)
+            prog_count = sum([len(listElem)
+                             for listElem in programs_by_channel.values()])
+            channel_programs.set_postfix({'T': prog_count})
+            channel_programs.unit = bar_unit_format.format(
+                len(programs_by_channel))
+
         return programs_by_channel
 
     def _fetch_channel(self, chan) -> Tuple[ChannelKey, List[Programme]]:
@@ -94,7 +115,21 @@ class PyEPG:
         days = int(self._config.find('timespan').text)
 
         programs = []
-        for i in range(days):
+
+        process = current_process()
+        pbar_id = chan_site_id if len(chan_site_id) <= PBAR_NAME_COL_WIDTH - 2 \
+            else chan_site_id[:PBAR_NAME_COL_WIDTH - 2] + '..'
+        bar_format = "{l_bar} {bar}|Days: {n_fmt:>3}/{total_fmt:<3} [T:{elapsed} ETA:{remaining:<5}]"
+        days_range = tqdm.tqdm(iterable=range(days),
+                               disable=not self._args.progress_bar,
+                               position=process._identity[0],
+                               unit='day',
+                               leave=False,
+                               dynamic_ncols=True,
+                               bar_format=bar_format,
+                               colour='green',
+                               desc=f'{pbar_id: >{PBAR_NAME_COL_WIDTH}}')
+        for i in days_range:
             fetch_date = today + timedelta(days=i)
             day_programs = scraper.fetch_programs(
                 channel, chan_site_id, fetch_date)
@@ -120,12 +155,20 @@ class PyEPG:
         # Initialize parser
         parser = argparse.ArgumentParser(
             description='A simple, multi-threaded, modular EPG grabber written in Python')
-        # parser.add_argument(
-        #     "-p", "--proxy", help="Proxy URL, eg http://1.2.3.4:3128")
+        parser.add_argument(
+            "-p", "--progress-bar", help="Show a progress bar. Default: True",
+            default=True, type=argparse_str2bool, nargs='?', const=True)
+        parser.add_argument(
+            "-q", "--quiet", help="Quiet mode (no progress-bar, etc). Default: False",
+            default=False, type=argparse_str2bool, nargs='?', const=True)
         requiredArgs = parser.add_argument_group('required arguments')
         requiredArgs.add_argument(
             "-c", "--config", help="Path to py_epg.xml file", required=True)
-        return parser.parse_args()
+        args = parser.parse_args()
+
+        if args.quiet:
+            args.progress_bar = False
+        return args
 
     def __getstate__(self):
         self_dict = self.__dict__.copy()

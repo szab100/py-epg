@@ -31,8 +31,10 @@ handlers:
     encoding: utf8
 
 loggers:
+  urllib3.connectionpool:
+    level: ERROR
   py_epg:
-    level: TRACE
+    level: INFO
     handlers: [console]
     propagate: no
 
