@@ -14,6 +14,7 @@
     * auto http/s retries
     * random fake user_agents
 * 🚀 Save time by fetching channels in parallel (caution: use proxy server(s) to avoid getting blacklisted)!
+* 🧑🏻‍💻 Your contributions are welcome! Feel free to create a PR with your site scraper and/or framework improvement.
 
 <p align="center">
   <img src="https://raw.githubusercontent.com/szab100/py_epg/main/py_epg.gif">

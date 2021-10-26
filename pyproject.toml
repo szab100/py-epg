@@ -1,8 +1,16 @@
 [tool.poetry]
 name = "py-epg"
-version = "0.1.0"
-description = ""
+version = "0.1.2"
+description = "py_epg is an easy to use, modular, multi-process EPG grabber written in Python."
 authors = ["Szabolcs Fruhwald <mail@szab100.com>"]
+keywords = ["xmltv", "epg"]
+readme = "README.md"
+license = "MIT"
+homepage = "https://github.com/szab100/py_epg"
+repository = "https://github.com/szab100/py_epg"
+include = [
+    "LICENSE.txt",
+]
 
 [tool.poetry.dependencies]
 python = "^3.7"
