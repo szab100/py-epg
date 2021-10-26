@@ -35,12 +35,12 @@ class EpgScraper(ABC):
     @abstractmethod
     def fetch_programs(self, channel: Channel, channel_site_id: str, fetch_date: date) -> List[Programme]:
         """
-        Returns a Dict with all the programmes for the given channel and day.
+        Returns a list of all programs for the given channel and day.
 
         Notes:
             - All dates must be in local xmltv format with timezone info.
             - Stop times are automatically set from programs' start times.
-            - The order of returned programmes is irrelevant, they will get sorted by start time.
+            - The order of returned programs is irrelevant, they are sorted by channel & start time.
 
         Parameters:
             channel_site_id: the channel's name as present on this EPG site
