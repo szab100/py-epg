@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "py-epg"
-version = "0.2.6"
+version = "0.2.7"
 description = "py_epg is an easy to use, modular, multi-process EPG grabber written in Python."
 authors = ["Szabolcs Fruhwald <mail@szab100.com>"]
 keywords = ["xmltv", "epg"]
