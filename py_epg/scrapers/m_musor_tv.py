@@ -130,6 +130,8 @@ class MusorTvMobile(EpgScraper):
             xmltv_ns = f'{season - 1}.{episode - 1}.' if season > 0 else f'.{episode - 1}.'
             program.episode_num = [EpisodeNum(content=[onscreen], system='onscreen'),
                                    EpisodeNum(content=[xmltv_ns], system='xmltv_ns')]
+            stripped_title = title.rsplit(' ', 1)[0]
+            program.title = [Title(content=[stripped_title], lang='hu')]
 
     def _set_prg_sub_title_and_year(self, program, prg):
         prg_sub_title = prg.select_one('div[itemprop="description"]')
