@@ -8,6 +8,7 @@ from typing import List
 
 import roman
 from bs4 import BeautifulSoup
+from datetime import datetime
 from dateutil import tz
 from dateutil.parser import parse
 from py_epg.common.epg_scraper import EpgScraper
@@ -28,9 +29,9 @@ RE_MIXED_DESCRIPTION = re.compile(
 )
 
 RE_SEASON_EPISODE = re.compile(
-    "((?=[MDCLXVI])M*D?C{0,4}L?X{0,4}V?I{0,4})\.\/([0-9]+)\.")
-RE_EPISODE_RANGE = re.compile("([0-9]+)\.-([0-9]+)\.")
-RE_SINGLE_EPISODE = re.compile("([0-9]+)\.")
+    r"((?=[MDCLXVI])M*D?C{0,4}L?X{0,4}V?I{0,4})\.\/([0-9]+)\.")
+RE_EPISODE_RANGE = re.compile(r"([0-9]+)\.-([0-9]+)\.")
+RE_SINGLE_EPISODE = re.compile(r"([0-9]+)\.")
 
 
 class MusorTvMobile(EpgScraper):
@@ -43,13 +44,16 @@ class MusorTvMobile(EpgScraper):
         self._day_url_tpl = Template(
             self._base_url + '/napi/tvmusor/$chan_site_id/$date')
         self._tz_utc = tz.tzutc()
-        self._tz_local = tz.tzlocal()
+        self._tz_local = tz.gettz('Europe/Budapest')
 
     def site_name(self) -> str:
         return self._site_id
 
+    def today(self) -> date:
+        return datetime.now(tz=self._tz_local).date()
+
     def fetch_channel(self, chan_site_id, name) -> Channel:
-        today_str = date.today().strftime("%Y.%m.%d")
+        today_str = self.today().strftime("%Y.%m.%d")
         url = self._day_url_tpl.substitute(
             chan_site_id=chan_site_id, date=today_str)
         soup = self._get_soup(url)
@@ -143,15 +147,15 @@ class MusorTvMobile(EpgScraper):
                 if '-' in year:
                     # 2005-2010 => pick end year, eg. 2010
                     year = year.split('-')[-1]
-                program.date = [year]
+                program.date = year
                 subtitle = SubTitle(content=[','.join(parts[:-1])], lang='hu')
                 program.sub_title = [subtitle] + program.sub_title
             else:
                 # edge case: no subtitle, just a year
                 if subtitle.isnumeric():
-                    program.date = [subtitle]
+                    program.date = subtitle
                 else:
-                    program.sub_title = [subtitle]
+                    program.sub_title = [SubTitle(content=[subtitle])]
 
     def _set_prg_icon(self, program, prg_details_page):
         prg_icon = prg_details_page.select_one('img[itemprop="image"]')
@@ -203,5 +207,5 @@ class MusorTvMobile(EpgScraper):
                     program.credits = credits
 
     def _get_soup(self, url) -> BeautifulSoup:
-        page = self._http.get(url)
+        page = self._http.get(url, timeout=60)
         return BeautifulSoup(page.text, "html.parser")

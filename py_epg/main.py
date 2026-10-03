@@ -77,6 +77,11 @@ class PyEPG:
         pbar_id = 'All Channels'
         programs_by_channel = defaultdict(list)
         channels = self._config.findall('channel')
+        missing_sites = {chan.attrib['site'] for chan in channels
+                         if chan.attrib['site'] not in self._epg_scrapers}
+        if missing_sites:
+            raise RuntimeError(
+                f'Could not find scraper(s) for site(s): {", ".join(sorted(missing_sites))}')
         self._log.info(
             f'Start grabbing programs for {len(channels)} channels using {self._pool_size} workers.')
         bar_unit_format = 'Progs: 0'
@@ -108,11 +113,10 @@ class PyEPG:
 
         scraper = self._epg_scrapers.get(site)
         if not scraper:
-            self._log.error(f'Could not find scraper for site={site}.')
-            sys.exit(-1)
+            raise RuntimeError(f'Could not find scraper for site={site}.')
 
         channel = scraper.fetch_channel(chan_site_id, chan_name)
-        today = date.today()
+        today = scraper.today()
         days = int(self._config.find('timespan').text)
 
         programs = []

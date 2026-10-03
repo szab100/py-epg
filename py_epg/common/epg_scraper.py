@@ -28,6 +28,14 @@ class EpgScraper(ABC):
     def site_name(self) -> str:
         """Returns the site_id of the EPG website this scraper supports"""
 
+    def today(self) -> date:
+        """
+        Returns 'today' in the timezone relevant to this EPG site.
+        Override in scrapers targeting sites in a specific timezone so that
+        results are consistent regardless of the machine's local timezone.
+        """
+        return date.today()
+
     @abstractmethod
     def fetch_channel(self, site_id, xmltv_id, name) -> Channel:
         """Fetches and returns the requested channel object."""

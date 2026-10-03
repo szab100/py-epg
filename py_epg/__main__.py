@@ -2,4 +2,5 @@
 from py_epg import main
 
 # Run
-main.main()
+if __name__ == '__main__':
+    main.main()
