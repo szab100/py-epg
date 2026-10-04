@@ -20,11 +20,13 @@ UA = UserAgent()
 class EpgScraper(ABC):
     """Abstract class providing simple methods to fetch XMLTV data from an EPG website."""
 
-    def __init__(self, name: str, proxy=None, user_agent=None, cache=None):
+    def __init__(self, name: str, proxy=None, user_agent=None, cache=None,
+                 metadata=None):
         super().__init__()
         self._log = logging.getLogger(name)
         self._user_agent = user_agent if user_agent else UA.random
         self._cache = cache if cache is not None else NULL_CACHE
+        self._metadata = metadata
         if isinstance(proxy, ProxyPool):
             self._http = get_proxy_session(
                 pool=proxy, user_agent=self._user_agent)

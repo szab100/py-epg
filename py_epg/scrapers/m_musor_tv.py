@@ -35,9 +35,11 @@ RE_SINGLE_EPISODE = re.compile(r"([0-9]+)\.")
 
 
 class MusorTvMobile(EpgScraper):
-    def __init__(self, proxy=None, user_agent=None, cache=None):
+    def __init__(self, proxy=None, user_agent=None, cache=None,
+                 metadata=None):
         super().__init__(name=__name__, proxy=proxy,
-                         user_agent=user_agent, cache=cache)
+                         user_agent=user_agent, cache=cache,
+                         metadata=metadata)
         self._site_id = "m.musor.tv"
         self._base_url = 'https://m.musor.tv'
         self._page_encoding = 'utf-8'

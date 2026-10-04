@@ -20,8 +20,10 @@ from xmltv.models import Channel, Programme, Tv
 from py_epg.common.cache import Cache
 from py_epg.common.xmltv_writer import write_file_from_xml
 from py_epg.common.epg_scraper import EpgScraper
+from py_epg.common.metadata import build_metadata
 from py_epg.common.multiprocess_helper import setup_ltree_pickling
 from py_epg.common.proxy import ProxyPool
+from py_epg.common.requests import get_http_session
 from py_epg.common.types import ChannelKey
 from py_epg.common.utils import argparse_str2bool
 from py_epg.scrapers import *
@@ -55,6 +57,7 @@ class PyEPG:
         self._proxy = self._build_proxy()
         self._cache = self._build_cache()
         self._cache.delete_expired()
+        self._metadata = self._build_metadata()
         self._epg_scrapers = self._init_epg_scrapers()
         setup_ltree_pickling()
         pool_size = self._config.find('pool-size')
@@ -74,7 +77,8 @@ class PyEPG:
         programs = []
         for chan_key, prgs in sorted(data.items(),
                                      key=lambda item: item[0].id):
-            channels.append(chan_key.channel)
+            if chan_key.channel is not None:
+                channels.append(chan_key.channel)
             programs.extend(
                 sorted(prgs, key=lambda prg: prg and prg.start))
         self._post_process_programs(programs)
@@ -135,7 +139,13 @@ class PyEPG:
         if not scraper:
             raise RuntimeError(f'Could not find scraper for site={site}.')
 
-        channel = scraper.fetch_channel(chan_site_id, chan_name)
+        try:
+            channel = scraper.fetch_channel(chan_site_id, chan_name)
+        except requests.RequestException as e:
+            # A single broken/missing channel shouldn't abort the whole run.
+            self._log.error(
+                f'{chan_site_id}: failed to fetch channel: {e}')
+            return ChannelKey(chan_site_id.upper(), None), []
         key = ChannelKey(channel.id, channel)
         today = scraper.today()
         days = int(self._config.find('timespan').text)
@@ -205,7 +215,13 @@ class PyEPG:
             ttls={
                 'channel': int(cfg.attrib.get('channel-ttl', 604800)),
                 'program': int(cfg.attrib.get('program-ttl', 2592000)),
+                'meta': int(cfg.attrib.get('meta-ttl', 7776000)),
             })
+
+    def _build_metadata(self):
+        cfg = self._config.find('metadata')
+        session = get_http_session()
+        return build_metadata(cfg, session=session, cache=self._cache)
 
     def _init_epg_scrapers(self) -> Dict[str, EpgScraper]:
         result = {}
@@ -214,7 +230,8 @@ class PyEPG:
         for scraper_class in implementations:
             obj = scraper_class(proxy=self._proxy,
                                 user_agent=user_agent.text if user_agent is not None else None,
-                                cache=self._cache)
+                                cache=self._cache,
+                                metadata=self._metadata)
             result[obj.site_name()] = obj
         return result
 

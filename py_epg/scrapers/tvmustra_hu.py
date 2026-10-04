@@ -28,9 +28,11 @@ class TvMustraHu(EpgScraper):
     (the 'table' token comes from the programme's onclick handler).
     """
 
-    def __init__(self, proxy=None, user_agent=None, cache=None):
+    def __init__(self, proxy=None, user_agent=None, cache=None,
+                 metadata=None):
         super().__init__(name=__name__, proxy=proxy,
-                         user_agent=user_agent, cache=cache)
+                         user_agent=user_agent, cache=cache,
+                         metadata=metadata)
         self._site_id = "tvmustra.hu"
         self._base_url = 'https://www.tvmustra.hu'
         self._chan_id_tpl = Template('$chan_id.' + self._site_id)
@@ -92,7 +94,8 @@ class TvMustraHu(EpgScraper):
             details = self._get_program_details(table, prog_id)
             if not details:
                 missing_details += 1
-            self._apply_program_details(program, details)
+            self._apply_program_details(
+                program, details, title_elem.get_text(strip=True))
             programs.append(program)
         if missing_details:
             self._log.info(
@@ -158,11 +161,13 @@ class TvMustraHu(EpgScraper):
             'previously_shown': bool(d.get('ismetles')),
         }
 
-    def _apply_program_details(self, program: Programme, details: dict):
+    def _apply_program_details(self, program: Programme, details: dict,
+                               title: str = ''):
+        icon = self._resolve_icon(details, title)
+        if icon:
+            program.icon = [Icon(src=icon)]
         if not details:
             return
-        if details['icon']:
-            program.icon = [Icon(src=details['icon'])]
         if details['orig_title']:
             program.title.append(
                 Title(content=[details['orig_title']], lang='en'))
@@ -206,6 +211,18 @@ class TvMustraHu(EpgScraper):
                                      system='tvmustra.hu')]
         if details['previously_shown']:
             program.previously_shown = PreviouslyShown()
+
+    def _resolve_icon(self, details: dict, title: str) -> Optional[str]:
+        # Metadata provider first (consistent quality posters/stills),
+        # falling back to the site's own broadcast image.
+        if self._metadata:
+            icon = self._metadata.icon_for(
+                title, orig_title=details.get('orig_title'),
+                year=details.get('date'), season=details.get('season'),
+                episode=details.get('episode'))
+            if icon:
+                return icon
+        return details.get('icon')
 
     def _abs_url(self, src: Optional[str]) -> Optional[str]:
         if not src:
