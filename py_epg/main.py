@@ -6,7 +6,6 @@ import os
 import pathlib
 import time
 from collections import defaultdict
-from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import date, timedelta
 from multiprocessing import Pool, current_process
 from pprint import pprint
@@ -107,8 +106,11 @@ class PyEPG:
         """
         Batched metadata resolution: workers tag programmes with
         '_meta_lookup' params instead of doing inline HTTP lookups, so
-        identical lookups are deduplicated across all channels/airings
-        and resolved here in one thread pool.
+        identical lookups are deduplicated across all channels/airings.
+        The unique lookups are resolved on the same worker pool as the
+        fetch - they inherit each worker's request throttling and, with
+        a proxy list, the rotating proxy session (per-request proxy
+        switch + retry through the next proxy).
         """
         if not self._metadata:
             return
@@ -119,36 +121,32 @@ class PyEPG:
                 by_key[args].append(p)
         if not by_key:
             return
-        cfg = self._config.find('metadata')
-        workers = int(cfg.attrib.get('workers', 8))
         self._log.info(
             f'Resolving metadata for {len(by_key)} unique programmes '
-            f'({len(programs)} total) using {workers} threads.')
+            f'({len(programs)} total) using {self._pool_size} workers.')
         metas = {}
         done = 0
         last_log = time.monotonic()
-        with ThreadPoolExecutor(max_workers=workers) as ex:
-            futs = {ex.submit(self._metadata.metadata_for, *args): args
-                    for args in by_key}
-            for fut in tqdm.tqdm(
-                    as_completed(futs), total=len(futs),
-                    disable=not self._args.progress_bar,
-                    desc='Metadata', dynamic_ncols=True):
-                done += 1
-                try:
-                    metas[futs[fut]] = fut.result()
-                except Exception as e:
-                    # a failed lookup is not cached - retried next run
-                    self._log.warning(
-                        f'Metadata lookup failed for '
-                        f'{futs[fut][0]!r}: {e}')
-                # without progress bars, log a heartbeat so long
-                # cold-cache passes don't look stuck
-                if not self._args.progress_bar and \
-                        time.monotonic() - last_log >= 10:
-                    last_log = time.monotonic()
-                    self._log.info(
-                        f'Metadata: {done}/{len(futs)} lookups resolved.')
+        results = self._pool.imap_unordered(
+            self._resolve_metadata, by_key.keys(), chunksize=1)
+        for args, meta, error in tqdm.tqdm(
+                results, total=len(by_key),
+                disable=not self._args.progress_bar,
+                desc='Metadata', dynamic_ncols=True):
+            done += 1
+            if error is not None:
+                # a failed lookup is not cached - retried next run
+                self._log.warning(
+                    f'Metadata lookup failed for {args[0]!r}: {error}')
+                continue
+            metas[args] = meta
+            # without progress bars, log a heartbeat so long
+            # cold-cache passes don't look stuck
+            if not self._args.progress_bar and \
+                    time.monotonic() - last_log >= 10:
+                last_log = time.monotonic()
+                self._log.info(
+                    f'Metadata: {done}/{len(by_key)} lookups resolved.')
         enriched = 0
         no_match = 0
         failed = 0
@@ -176,6 +174,18 @@ class PyEPG:
             f'Metadata applied to {enriched} programmes '
             f'({provider_stats or "none"}), no match for {no_match}'
             f'{failed_stats}. Fields filled: {field_stats or "none"}.')
+
+    def _resolve_metadata(self, args):
+        """
+        Pool task: resolves one unique '_meta_lookup' tuple inside a
+        fetch worker. Errors come back as strings rather than being
+        raised through the pool, so one bad lookup can't abort the
+        whole enrichment pass.
+        """
+        try:
+            return args, self._metadata.metadata_for(*args), None
+        except Exception as e:
+            return args, None, f'{type(e).__name__}: {e}'
 
     @staticmethod
     def _apply_program_metadata(p: Programme, meta: dict,
@@ -363,6 +373,10 @@ class PyEPG:
 
     def _build_metadata(self):
         cfg = self._config.find('metadata')
+        if cfg is not None and 'workers' in cfg.attrib:
+            self._log.warning(
+                "<metadata> 'workers' attribute is ignored - lookups "
+                "now run on the fetch worker pool (see <pool-size>)")
         # Browser UA - the default 'python-requests' UA gets flagged by
         # bot protection before rate limits even apply.
         ua_cfg = self._config.find('user-agent')
