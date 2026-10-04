@@ -2,6 +2,7 @@
 """TMDB-backed programme metadata provider."""
 
 import logging
+import threading
 from typing import Optional
 
 import requests
@@ -24,11 +25,21 @@ class TmdbMetadata(MetadataProvider):
       3. for TV hits with season+episode, prefer the episode still,
          episode title and episode synopsis over the series-level data
 
+    The series/movie match (step 1-2) is cached under a
+    season/episode-independent key - every episode of a series resolves
+    to the same TMDB entry, so they share one search instead of each
+    episode re-searching.
+
     Requires a free tmdb_api_key attribute on <metadata> (themoviedb.org
     -> Settings -> API).
     """
 
     name = 'tmdb'
+
+    # class-level so they don't get pickled into worker processes -
+    # serialises concurrent first-time searches for the same series
+    _MATCH_LOCKS_GUARD = threading.Lock()
+    _MATCH_LOCKS = {}
 
     def __init__(self, cfg, session: requests.Session,
                  cache=None, timeout: int = 15):
@@ -42,6 +53,40 @@ class TmdbMetadata(MetadataProvider):
 
     def _lookup(self, title, orig_title, year,
                 season, episode) -> Optional[dict]:
+        match = self._series_match(title, orig_title, year)
+        return self._to_metadata(match, season, episode) if match else None
+
+    def _series_match(self, title, orig_title, year):
+        """
+        Resolves the TMDB movie/series entry via search/multi. The raw
+        result is cached under a key without season/episode - the match
+        is identical for every episode of a series, so all of them share
+        a single search (and a single cached negative on no match).
+        """
+        key = f'meta:tmdb:series:{norm_title(title)}:' \
+              f'{norm_title(orig_title or "")}:{year or ""}'
+        if key in self._memo:
+            return self._memo[key]
+        with self._MATCH_LOCKS_GUARD:
+            lock = self._MATCH_LOCKS.setdefault(key, threading.Lock())
+        with lock:
+            # re-check under the lock - a parallel lookup thread may
+            # have resolved the same series while this one waited
+            if key in self._memo:
+                return self._memo[key]
+            if self._cache is not None:
+                cached = self._cache.get(key)
+                if cached is not None:
+                    match = cached or None
+                    self._memo[key] = match
+                    return match
+            match = self._search(title, orig_title, year)
+            if self._cache is not None:
+                self._cache.set(key, match or {}, 'meta')
+            self._memo[key] = match
+            return match
+
+    def _search(self, title, orig_title, year):
         queries = [q for q in (orig_title, title) if q]
         for q in queries:
             # RequestExceptions propagate: a transient failure must not
@@ -55,7 +100,7 @@ class TmdbMetadata(MetadataProvider):
             match = self._best_match(
                 r.json().get('results', []), queries, year)
             if match:
-                return self._to_metadata(match, season, episode)
+                return match
         return None
 
     def _best_match(self, results, queries, year):
