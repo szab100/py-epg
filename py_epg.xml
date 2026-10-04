@@ -103,104 +103,104 @@
        a channel between sites or the client-side mapping breaks.
        The element text becomes the channel's display-name. -->
 
-  <channel update="i" site="port.hu" site_id="tvchannel-1" xmltv_id="TVCHANNEL-1.PORT.HU">M1 HD</channel>
-  <channel update="i" site="port.hu" site_id="tvchannel-2" xmltv_id="TVCHANNEL-2.PORT.HU">M2 / Petőfi TV</channel>
-  <channel update="i" site="port.hu" site_id="tvchannel-6" xmltv_id="TVCHANNEL-6.PORT.HU">DUNA HD</channel>
-  <channel update="i" site="port.hu" site_id="tvchannel-320" xmltv_id="TVCHANNEL-320.PORT.HU">M4 Sport HD</channel>
-  <channel update="i" site="port.hu" site_id="tvchannel-103" xmltv_id="TVCHANNEL-103.PORT.HU">DUNA W/M4 Sport</channel>
-  <channel update="i" site="port.hu" site_id="tvchannel-301" xmltv_id="TVCHANNEL-301.PORT.HU">M5 HD</channel>
-  <channel update="i" site="port.hu" site_id="tvchannel-38" xmltv_id="TVCHANNEL-38.PORT.HU">TV4 HD</channel>
-  <channel update="i" site="port.hu" site_id="tvchannel-5" xmltv_id="TVCHANNEL-5.PORT.HU">RTL HD</channel>
-  <channel update="i" site="port.hu" site_id="tvchannel-3" xmltv_id="TVCHANNEL-3.PORT.HU">TV2 HD</channel>
-  <channel update="i" site="port.hu" site_id="tvchannel-21" xmltv_id="TVCHANNEL-21.PORT.HU">VIASAT3</channel>
-  <channel update="i" site="port.hu" site_id="tvchannel-164" xmltv_id="TVCHANNEL-164.PORT.HU">VIASAT6</channel>
-  <channel update="i" site="port.hu" site_id="tvchannel-244" xmltv_id="TVCHANNEL-244.PORT.HU">Super TV2 HD</channel>
-  <channel update="i" site="port.hu" site_id="tvchannel-365" xmltv_id="TVCHANNEL-365.PORT.HU">Moziverzum</channel>
-  <channel update="i" site="port.hu" site_id="tvchannel-241" xmltv_id="TVCHANNEL-241.PORT.HU">RTL KETTŐ HD</channel>
-  <channel update="i" site="port.hu" site_id="tvchannel-32" xmltv_id="TVCHANNEL-32.PORT.HU">Film+ HD</channel>
-  <channel update="i" site="port.hu" site_id="tvchannel-229" xmltv_id="TVCHANNEL-229.PORT.HU">Mozi+ HD</channel>
-  <channel update="i" site="port.hu" site_id="tvchannel-380" xmltv_id="TVCHANNEL-380.PORT.HU">Mozi Klub</channel>
-  <channel update="i" site="port.hu" site_id="tvchannel-79" xmltv_id="TVCHANNEL-79.PORT.HU">Cool TV HD</channel>
-  <channel update="i" site="port.hu" site_id="tvchannel-179" xmltv_id="TVCHANNEL-179.PORT.HU">Sorozat+</channel>
-  <channel update="i" site="port.hu" site_id="tvchannel-180" xmltv_id="TVCHANNEL-180.PORT.HU">RTL Gold</channel>
-  <channel update="i" site="port.hu" site_id="tvchannel-42" xmltv_id="TVCHANNEL-42.PORT.HU">AXN HD</channel>
-  <channel update="i" site="port.hu" site_id="tvchannel-132" xmltv_id="TVCHANNEL-132.PORT.HU">VIASAT2</channel>
-  <channel update="i" site="port.hu" site_id="tvchannel-364" xmltv_id="TVCHANNEL-364.PORT.HU">Jocky TV</channel>
-  <channel update="i" site="port.hu" site_id="tvchannel-304" xmltv_id="TVCHANNEL-304.PORT.HU">Izaura TV</channel>
-  <channel update="i" site="port.hu" site_id="tvchannel-215" xmltv_id="TVCHANNEL-215.PORT.HU">Prime</channel>
-  <channel update="i" site="port.hu" site_id="tvchannel-228" xmltv_id="TVCHANNEL-228.PORT.HU">Story4</channel>
-  <channel update="i" site="port.hu" site_id="tvchannel-95" xmltv_id="TVCHANNEL-95.PORT.HU">Film Mánia HD</channel>
-  <channel update="i" site="port.hu" site_id="tvchannel-89" xmltv_id="TVCHANNEL-89.PORT.HU">Film Café HD</channel>
-  <channel update="i" site="port.hu" site_id="tvchannel-178" xmltv_id="TVCHANNEL-178.PORT.HU">RTL HÁROM HD</channel>
-  <channel update="i" site="port.hu" site_id="tvchannel-139" xmltv_id="TVCHANNEL-139.PORT.HU">AMC HD</channel>
-  <channel update="i" site="port.hu" site_id="tvchannel-311" xmltv_id="TVCHANNEL-311.PORT.HU">TV2 Comedy</channel>
-  <channel update="i" site="port.hu" site_id="tvchannel-226" xmltv_id="TVCHANNEL-226.PORT.HU">FILMBOX+ one HD</channel>
-  <channel update="i" site="port.hu" site_id="tvchannel-377" xmltv_id="TVCHANNEL-377.PORT.HU">Magyar Mozi TV</channel>
-  <channel update="i" site="port.hu" site_id="tvchannel-382" xmltv_id="TVCHANNEL-382.PORT.HU">Sorozat Klub</channel>
-  <channel update="i" site="port.hu" site_id="tvchannel-376" xmltv_id="TVCHANNEL-376.PORT.HU">Max4</channel>
-  <channel update="i" site="port.hu" site_id="tvchannel-284" xmltv_id="TVCHANNEL-284.PORT.HU">Galaxy4</channel>
-  <channel update="i" site="port.hu" site_id="tvchannel-325" xmltv_id="TVCHANNEL-325.PORT.HU">Viasat Epic Drama</channel>
-  <channel update="i" site="port.hu" site_id="tvchannel-359" xmltv_id="TVCHANNEL-359.PORT.HU">Film4</channel>
-  <channel update="i" site="port.hu" site_id="tvchannel-363" xmltv_id="TVCHANNEL-363.PORT.HU">ATV Extra HD</channel>
-  <channel update="i" site="port.hu" site_id="tvchannel-15" xmltv_id="TVCHANNEL-15.PORT.HU">ATV HD</channel>
-  <channel update="i" site="port.hu" site_id="tvchannel-10" xmltv_id="TVCHANNEL-10.PORT.HU">Hír TV HD</channel>
-  <channel update="i" site="port.hu" site_id="tvchannel-305" xmltv_id="TVCHANNEL-305.PORT.HU">Spíler1 TV HD</channel>
-  <channel update="i" site="port.hu" site_id="tvchannel-90" xmltv_id="TVCHANNEL-90.PORT.HU">Sport 1 HD</channel>
-  <channel update="i" site="port.hu" site_id="tvchannel-362" xmltv_id="TVCHANNEL-362.PORT.HU">Spíler2 TV HD</channel>
-  <channel update="i" site="port.hu" site_id="tvchannel-44" xmltv_id="TVCHANNEL-44.PORT.HU">Sport 2 HD</channel>
-  <channel update="i" site="port.hu" site_id="tvchannel-94" xmltv_id="TVCHANNEL-94.PORT.HU">Eurosport HD</channel>
-  <channel update="i" site="port.hu" site_id="tvchannel-37" xmltv_id="TVCHANNEL-37.PORT.HU">Eurosport 2 HD</channel>
-  <channel update="i" site="port.hu" site_id="tvchannel-176" xmltv_id="TVCHANNEL-176.PORT.HU">The Fishing &amp; Hunting</channel>
-  <channel update="i" site="port.hu" site_id="tvchannel-370" xmltv_id="TVCHANNEL-370.PORT.HU">Arena4 HD</channel>
-  <channel update="i" site="port.hu" site_id="tvchannel-375" xmltv_id="TVCHANNEL-375.PORT.HU">Match4 HD</channel>
-  <channel update="i" site="port.hu" site_id="tvchannel-9" xmltv_id="TVCHANNEL-9.PORT.HU">Spektrum HD</channel>
-  <channel update="i" site="port.hu" site_id="tvchannel-251" xmltv_id="TVCHANNEL-251.PORT.HU">BBC Earth</channel>
-  <channel update="i" site="port.hu" site_id="tvchannel-294" xmltv_id="TVCHANNEL-294.PORT.HU">Nat Geo Wild HD</channel>
-  <channel update="i" site="port.hu" site_id="tvchannel-14" xmltv_id="TVCHANNEL-14.PORT.HU">Nat Geo HD</channel>
-  <channel update="i" site="port.hu" site_id="tvchannel-83" xmltv_id="TVCHANNEL-83.PORT.HU">Discovery Channel</channel>
-  <channel update="i" site="port.hu" site_id="tvchannel-82" xmltv_id="TVCHANNEL-82.PORT.HU">Animal Planet</channel>
-  <channel update="i" site="port.hu" site_id="tvchannel-397" xmltv_id="TVCHANNEL-397.PORT.HU">HGTV</channel>
-  <channel update="i" site="port.hu" site_id="tvchannel-381" xmltv_id="TVCHANNEL-381.PORT.HU">RTL Otthon HD</channel>
-  <channel update="i" site="port.hu" site_id="tvchannel-233" xmltv_id="TVCHANNEL-233.PORT.HU">TLC</channel>
-  <channel update="i" site="port.hu" site_id="tvchannel-279" xmltv_id="TVCHANNEL-279.PORT.HU">ID HD</channel>
-  <channel update="i" site="port.hu" site_id="tvchannel-182" xmltv_id="TVCHANNEL-182.PORT.HU">HISTORY HD</channel>
-  <channel update="i" site="port.hu" site_id="tvchannel-213" xmltv_id="TVCHANNEL-213.PORT.HU">OzoneTV HD</channel>
-  <channel update="i" site="port.hu" site_id="tvchannel-65" xmltv_id="TVCHANNEL-65.PORT.HU">Viasat Explore</channel>
-  <channel update="i" site="port.hu" site_id="tvchannel-66" xmltv_id="TVCHANNEL-66.PORT.HU">Viasat History</channel>
-  <channel update="i" site="port.hu" site_id="tvchannel-223" xmltv_id="TVCHANNEL-223.PORT.HU">Viasat Nature</channel>
-  <channel update="i" site="port.hu" site_id="tvchannel-84" xmltv_id="TVCHANNEL-84.PORT.HU">Travel HD</channel>
-  <channel update="i" site="port.hu" site_id="tvchannel-212" xmltv_id="TVCHANNEL-212.PORT.HU">Life TV HD</channel>
-  <channel update="i" site="port.hu" site_id="tvchannel-46" xmltv_id="TVCHANNEL-46.PORT.HU">TV Paprika HD</channel>
-  <channel update="i" site="port.hu" site_id="tvchannel-20" xmltv_id="TVCHANNEL-20.PORT.HU">Spektrum Home</channel>
-  <channel update="i" site="port.hu" site_id="tvchannel-309" xmltv_id="TVCHANNEL-309.PORT.HU">TV2 Séf</channel>
-  <channel update="i" site="port.hu" site_id="tvchannel-307" xmltv_id="TVCHANNEL-307.PORT.HU">FEM3</channel>
-  <channel update="i" site="port.hu" site_id="tvchannel-202" xmltv_id="TVCHANNEL-202.PORT.HU">Da Vinci</channel>
-  <channel update="i" site="port.hu" site_id="tvchannel-35" xmltv_id="TVCHANNEL-35.PORT.HU">Disney Channel</channel>
-  <channel update="i" site="port.hu" site_id="tvchannel-156" xmltv_id="TVCHANNEL-156.PORT.HU">Duck TV</channel>
-  <channel update="i" site="port.hu" site_id="tvchannel-41" xmltv_id="TVCHANNEL-41.PORT.HU">Nickelodeon</channel>
-  <channel update="i" site="port.hu" site_id="tvchannel-236" xmltv_id="TVCHANNEL-236.PORT.HU">Nick Jr.</channel>
-  <channel update="i" site="port.hu" site_id="tvchannel-16" xmltv_id="TVCHANNEL-16.PORT.HU">Minimax</channel>
-  <channel update="i" site="port.hu" site_id="tvchannel-77" xmltv_id="TVCHANNEL-77.PORT.HU">Cartoonito</channel>
-  <channel update="i" site="port.hu" site_id="tvchannel-91" xmltv_id="TVCHANNEL-91.PORT.HU">Cartoon Network</channel>
-  <channel update="i" site="port.hu" site_id="tvchannel-197" xmltv_id="TVCHANNEL-197.PORT.HU">JimJam</channel>
-  <channel update="i" site="port.hu" site_id="tvchannel-310" xmltv_id="TVCHANNEL-310.PORT.HU">TV2 Kids</channel>
-  <channel update="i" site="port.hu" site_id="tvchannel-366" xmltv_id="TVCHANNEL-366.PORT.HU">Nicktoons</channel>
-  <channel update="i" site="port.hu" site_id="tvchannel-379" xmltv_id="TVCHANNEL-379.PORT.HU">Kölyök Klub</channel>
-  <channel update="i" site="port.hu" site_id="tvchannel-80" xmltv_id="TVCHANNEL-80.PORT.HU">Mezzo</channel>
-  <channel update="i" site="port.hu" site_id="tvchannel-217" xmltv_id="TVCHANNEL-217.PORT.HU">Muzsika TV</channel>
-  <channel update="i" site="port.hu" site_id="tvchannel-303" xmltv_id="TVCHANNEL-303.PORT.HU">Zenebutik</channel>
-  <channel update="i" site="port.hu" site_id="tvchannel-144" xmltv_id="TVCHANNEL-144.PORT.HU">MTV European</channel>
-  <channel update="i" site="port.hu" site_id="tvchannel-216" xmltv_id="TVCHANNEL-216.PORT.HU">Magyar Sláger</channel>
-  <channel update="i" site="tvmustra.hu" site_id="DIKHTV" xmltv_id="DIKHTV.TVMUSTRA.HU">Dikh TV HD</channel>
-  <channel update="i" site="port.hu" site_id="tvchannel-4" xmltv_id="TVCHANNEL-4.PORT.HU">CNN</channel>
-  <channel update="i" site="tvmustra.hu" site_id="TVE" xmltv_id="TVE.TVMUSTRA.HU">TVE</channel>
-  <channel update="i" site="tvmustra.hu" site_id="SAT1" xmltv_id="SAT1.TVMUSTRA.HU">SAT1</channel>
-  <channel update="i" site="port.hu" site_id="tvchannel-373" xmltv_id="TVCHANNEL-373.PORT.HU">Rai Uno</channel>
-  <channel update="i" site="port.hu" site_id="tvchannel-115" xmltv_id="TVCHANNEL-115.PORT.HU">PAX TV</channel>
-  <channel update="i" site="port.hu" site_id="tvchannel-275" xmltv_id="TVCHANNEL-275.PORT.HU">EWTN</channel>
-  <channel update="i" site="tvmustra.hu" site_id="JAZZTV" xmltv_id="JAZZTV.TVMUSTRA.HU">Jazz TV</channel>
-  <channel update="i" site="port.hu" site_id="tvchannel-371" xmltv_id="TVCHANNEL-371.PORT.HU">Apostol TV</channel>
-  <channel update="i" site="tvmustra.hu" site_id="MR1KOSSUTH" xmltv_id="MR1KOSSUTH.TVMUSTRA.HU">KOSSUTH RÁDIÓ</channel>
-  <channel update="i" site="tvmustra.hu" site_id="MR2PETOFI" xmltv_id="MR2PETOFI.TVMUSTRA.HU">PETŐFI RÁDIÓ</channel>
-  <channel update="i" site="tvmustra.hu" site_id="MR3BARTOK" xmltv_id="MR3BARTOK.TVMUSTRA.HU">BARTÓK RÁDIÓ</channel>
+  <channel update="i" site="port.hu" site_id="tvchannel-1" xmltv_id="M1HD">M1 HD</channel>
+  <channel update="i" site="port.hu" site_id="tvchannel-2" xmltv_id="M2PETOFITV">M2 / Petőfi TV</channel>
+  <channel update="i" site="port.hu" site_id="tvchannel-6" xmltv_id="DUNAHD">DUNA HD</channel>
+  <channel update="i" site="port.hu" site_id="tvchannel-320" xmltv_id="M4SPORTHD">M4 Sport HD</channel>
+  <channel update="i" site="port.hu" site_id="tvchannel-103" xmltv_id="DUNAWM4SPORT">DUNA W/M4 Sport</channel>
+  <channel update="i" site="port.hu" site_id="tvchannel-301" xmltv_id="M5HD">M5 HD</channel>
+  <channel update="i" site="port.hu" site_id="tvchannel-38" xmltv_id="TV4HD">TV4 HD</channel>
+  <channel update="i" site="port.hu" site_id="tvchannel-5" xmltv_id="RTLHD">RTL HD</channel>
+  <channel update="i" site="port.hu" site_id="tvchannel-3" xmltv_id="TV2HD">TV2 HD</channel>
+  <channel update="i" site="port.hu" site_id="tvchannel-21" xmltv_id="VIASAT3">VIASAT3</channel>
+  <channel update="i" site="port.hu" site_id="tvchannel-164" xmltv_id="VIASAT6">VIASAT6</channel>
+  <channel update="i" site="port.hu" site_id="tvchannel-244" xmltv_id="SUPERTV2HD">Super TV2 HD</channel>
+  <channel update="i" site="port.hu" site_id="tvchannel-365" xmltv_id="MOZIVERZUM">Moziverzum</channel>
+  <channel update="i" site="port.hu" site_id="tvchannel-241" xmltv_id="RTLKETTOHD">RTL KETTŐ HD</channel>
+  <channel update="i" site="port.hu" site_id="tvchannel-32" xmltv_id="FILMHD">Film+ HD</channel>
+  <channel update="i" site="port.hu" site_id="tvchannel-229" xmltv_id="MOZIHD">Mozi+ HD</channel>
+  <channel update="i" site="port.hu" site_id="tvchannel-380" xmltv_id="MOZIKLUB">Mozi Klub</channel>
+  <channel update="i" site="port.hu" site_id="tvchannel-79" xmltv_id="COOLTVHD">Cool TV HD</channel>
+  <channel update="i" site="port.hu" site_id="tvchannel-179" xmltv_id="SOROZAT">Sorozat+</channel>
+  <channel update="i" site="port.hu" site_id="tvchannel-180" xmltv_id="RTLGOLD">RTL Gold</channel>
+  <channel update="i" site="port.hu" site_id="tvchannel-42" xmltv_id="AXNHD">AXN HD</channel>
+  <channel update="i" site="port.hu" site_id="tvchannel-132" xmltv_id="VIASAT2">VIASAT2</channel>
+  <channel update="i" site="port.hu" site_id="tvchannel-364" xmltv_id="JOCKYTV">Jocky TV</channel>
+  <channel update="i" site="port.hu" site_id="tvchannel-304" xmltv_id="IZAURATV">Izaura TV</channel>
+  <channel update="i" site="port.hu" site_id="tvchannel-215" xmltv_id="PRIME">Prime</channel>
+  <channel update="i" site="port.hu" site_id="tvchannel-228" xmltv_id="STORY4">Story4</channel>
+  <channel update="i" site="port.hu" site_id="tvchannel-95" xmltv_id="FILMMANIAHD">Film Mánia HD</channel>
+  <channel update="i" site="port.hu" site_id="tvchannel-89" xmltv_id="FILMCAFEHD">Film Café HD</channel>
+  <channel update="i" site="port.hu" site_id="tvchannel-178" xmltv_id="RTLHAROMHD">RTL HÁROM HD</channel>
+  <channel update="i" site="port.hu" site_id="tvchannel-139" xmltv_id="AMCHD">AMC HD</channel>
+  <channel update="i" site="port.hu" site_id="tvchannel-311" xmltv_id="TV2COMEDY">TV2 Comedy</channel>
+  <channel update="i" site="port.hu" site_id="tvchannel-226" xmltv_id="FILMBOXONEHD">FILMBOX+ one HD</channel>
+  <channel update="i" site="port.hu" site_id="tvchannel-377" xmltv_id="MAGYARMOZITV">Magyar Mozi TV</channel>
+  <channel update="i" site="port.hu" site_id="tvchannel-382" xmltv_id="SOROZATKLUB">Sorozat Klub</channel>
+  <channel update="i" site="port.hu" site_id="tvchannel-376" xmltv_id="MAX4">Max4</channel>
+  <channel update="i" site="port.hu" site_id="tvchannel-284" xmltv_id="GALAXY4">Galaxy4</channel>
+  <channel update="i" site="port.hu" site_id="tvchannel-325" xmltv_id="VIASATEPICDRAMA">Viasat Epic Drama</channel>
+  <channel update="i" site="port.hu" site_id="tvchannel-359" xmltv_id="FILM4">Film4</channel>
+  <channel update="i" site="port.hu" site_id="tvchannel-363" xmltv_id="ATVEXTRAHD">ATV Extra HD</channel>
+  <channel update="i" site="port.hu" site_id="tvchannel-15" xmltv_id="ATVHD">ATV HD</channel>
+  <channel update="i" site="port.hu" site_id="tvchannel-10" xmltv_id="HIRTVHD">Hír TV HD</channel>
+  <channel update="i" site="port.hu" site_id="tvchannel-305" xmltv_id="SPILER1TVHD">Spíler1 TV HD</channel>
+  <channel update="i" site="port.hu" site_id="tvchannel-90" xmltv_id="SPORT1HD">Sport 1 HD</channel>
+  <channel update="i" site="port.hu" site_id="tvchannel-362" xmltv_id="SPILER2TVHD">Spíler2 TV HD</channel>
+  <channel update="i" site="port.hu" site_id="tvchannel-44" xmltv_id="SPORT2HD">Sport 2 HD</channel>
+  <channel update="i" site="port.hu" site_id="tvchannel-94" xmltv_id="EUROSPORTHD">Eurosport HD</channel>
+  <channel update="i" site="port.hu" site_id="tvchannel-37" xmltv_id="EUROSPORT2HD">Eurosport 2 HD</channel>
+  <channel update="i" site="port.hu" site_id="tvchannel-176" xmltv_id="THEFISHINGHUNTING">The Fishing &amp; Hunting</channel>
+  <channel update="i" site="port.hu" site_id="tvchannel-370" xmltv_id="ARENA4HD">Arena4 HD</channel>
+  <channel update="i" site="port.hu" site_id="tvchannel-375" xmltv_id="MATCH4HD">Match4 HD</channel>
+  <channel update="i" site="port.hu" site_id="tvchannel-9" xmltv_id="SPEKTRUMHD">Spektrum HD</channel>
+  <channel update="i" site="port.hu" site_id="tvchannel-251" xmltv_id="BBCEARTH">BBC Earth</channel>
+  <channel update="i" site="port.hu" site_id="tvchannel-294" xmltv_id="NATGEOWILDHD">Nat Geo Wild HD</channel>
+  <channel update="i" site="port.hu" site_id="tvchannel-14" xmltv_id="NATGEOHD">Nat Geo HD</channel>
+  <channel update="i" site="port.hu" site_id="tvchannel-83" xmltv_id="DISCOVERYCHANNEL">Discovery Channel</channel>
+  <channel update="i" site="port.hu" site_id="tvchannel-82" xmltv_id="ANIMALPLANET">Animal Planet</channel>
+  <channel update="i" site="port.hu" site_id="tvchannel-397" xmltv_id="HGTV">HGTV</channel>
+  <channel update="i" site="port.hu" site_id="tvchannel-381" xmltv_id="RTLOTTHONHD">RTL Otthon HD</channel>
+  <channel update="i" site="port.hu" site_id="tvchannel-233" xmltv_id="TLC">TLC</channel>
+  <channel update="i" site="port.hu" site_id="tvchannel-279" xmltv_id="IDHD">ID HD</channel>
+  <channel update="i" site="port.hu" site_id="tvchannel-182" xmltv_id="HISTORYHD">HISTORY HD</channel>
+  <channel update="i" site="port.hu" site_id="tvchannel-213" xmltv_id="OZONETVHD">OzoneTV HD</channel>
+  <channel update="i" site="port.hu" site_id="tvchannel-65" xmltv_id="VIASATEXPLORE">Viasat Explore</channel>
+  <channel update="i" site="port.hu" site_id="tvchannel-66" xmltv_id="VIASATHISTORY">Viasat History</channel>
+  <channel update="i" site="port.hu" site_id="tvchannel-223" xmltv_id="VIASATNATURE">Viasat Nature</channel>
+  <channel update="i" site="port.hu" site_id="tvchannel-84" xmltv_id="TRAVELHD">Travel HD</channel>
+  <channel update="i" site="port.hu" site_id="tvchannel-212" xmltv_id="LIFETVHD">Life TV HD</channel>
+  <channel update="i" site="port.hu" site_id="tvchannel-46" xmltv_id="TVPAPRIKAHD">TV Paprika HD</channel>
+  <channel update="i" site="port.hu" site_id="tvchannel-20" xmltv_id="SPEKTRUMHOME">Spektrum Home</channel>
+  <channel update="i" site="port.hu" site_id="tvchannel-309" xmltv_id="TV2SEF">TV2 Séf</channel>
+  <channel update="i" site="port.hu" site_id="tvchannel-307" xmltv_id="FEM3">FEM3</channel>
+  <channel update="i" site="port.hu" site_id="tvchannel-202" xmltv_id="DAVINCI">Da Vinci</channel>
+  <channel update="i" site="port.hu" site_id="tvchannel-35" xmltv_id="DISNEYCHANNEL">Disney Channel</channel>
+  <channel update="i" site="port.hu" site_id="tvchannel-156" xmltv_id="DUCKTV">Duck TV</channel>
+  <channel update="i" site="port.hu" site_id="tvchannel-41" xmltv_id="NICKELODEON">Nickelodeon</channel>
+  <channel update="i" site="port.hu" site_id="tvchannel-236" xmltv_id="NICKJR">Nick Jr.</channel>
+  <channel update="i" site="port.hu" site_id="tvchannel-16" xmltv_id="MINIMAX">Minimax</channel>
+  <channel update="i" site="port.hu" site_id="tvchannel-77" xmltv_id="CARTOONITO">Cartoonito</channel>
+  <channel update="i" site="port.hu" site_id="tvchannel-91" xmltv_id="CARTOONNETWORK">Cartoon Network</channel>
+  <channel update="i" site="port.hu" site_id="tvchannel-197" xmltv_id="JIMJAM">JimJam</channel>
+  <channel update="i" site="port.hu" site_id="tvchannel-310" xmltv_id="TV2KIDS">TV2 Kids</channel>
+  <channel update="i" site="port.hu" site_id="tvchannel-366" xmltv_id="NICKTOONS">Nicktoons</channel>
+  <channel update="i" site="port.hu" site_id="tvchannel-379" xmltv_id="KOLYOKKLUB">Kölyök Klub</channel>
+  <channel update="i" site="port.hu" site_id="tvchannel-80" xmltv_id="MEZZO">Mezzo</channel>
+  <channel update="i" site="port.hu" site_id="tvchannel-217" xmltv_id="MUZSIKATV">Muzsika TV</channel>
+  <channel update="i" site="port.hu" site_id="tvchannel-303" xmltv_id="ZENEBUTIK">Zenebutik</channel>
+  <channel update="i" site="port.hu" site_id="tvchannel-144" xmltv_id="MTVEUROPEAN">MTV European</channel>
+  <channel update="i" site="port.hu" site_id="tvchannel-216" xmltv_id="MAGYARSLAGER">Magyar Sláger</channel>
+  <channel update="i" site="tvmustra.hu" site_id="DIKHTV" xmltv_id="DIKHTVHD">Dikh TV HD</channel>
+  <channel update="i" site="port.hu" site_id="tvchannel-4" xmltv_id="CNN">CNN</channel>
+  <channel update="i" site="tvmustra.hu" site_id="TVE" xmltv_id="TVE">TVE</channel>
+  <channel update="i" site="tvmustra.hu" site_id="SAT1" xmltv_id="SAT1">SAT1</channel>
+  <channel update="i" site="port.hu" site_id="tvchannel-373" xmltv_id="RAIUNO">Rai Uno</channel>
+  <channel update="i" site="port.hu" site_id="tvchannel-115" xmltv_id="PAXTV">PAX TV</channel>
+  <channel update="i" site="port.hu" site_id="tvchannel-275" xmltv_id="EWTN">EWTN</channel>
+  <channel update="i" site="tvmustra.hu" site_id="JAZZTV" xmltv_id="JAZZTV">Jazz TV</channel>
+  <channel update="i" site="port.hu" site_id="tvchannel-371" xmltv_id="APOSTOLTV">Apostol TV</channel>
+  <channel update="i" site="tvmustra.hu" site_id="MR1KOSSUTH" xmltv_id="KOSSUTHRADIO">KOSSUTH RÁDIÓ</channel>
+  <channel update="i" site="tvmustra.hu" site_id="MR2PETOFI" xmltv_id="PETOFIRADIO">PETŐFI RÁDIÓ</channel>
+  <channel update="i" site="tvmustra.hu" site_id="MR3BARTOK" xmltv_id="BARTOKRADIO">BARTÓK RÁDIÓ</channel>
 </settings>
