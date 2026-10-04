@@ -64,6 +64,7 @@ class TvMustraHu(EpgScraper):
                f'{fetch_date.strftime("%Y-%m-%d")}')
         soup = self._get_soup(url)
         programs = []
+        missing_details = 0
         # The daily page covers a broadcast day (early-morning programs roll
         # past midnight), so track the rollover and keep them all.
         last_time = None
@@ -89,8 +90,14 @@ class TvMustraHu(EpgScraper):
                 title=[Title(content=[title_elem.get_text(strip=True)],
                              lang='hu')])
             details = self._get_program_details(table, prog_id)
+            if not details:
+                missing_details += 1
             self._apply_program_details(program, details)
             programs.append(program)
+        if missing_details:
+            self._log.info(
+                f'{channel_site_id}: no detail data on the site for '
+                f'{missing_details}/{len(programs)} programs on {fetch_date}')
         return programs
 
     def _get_program_details(self, table: str, prog_id: str) -> dict:
@@ -108,7 +115,6 @@ class TvMustraHu(EpgScraper):
                 f'Failed to fetch program details {url}: {e}')
             return {}
         if payload.get('status') != 'success':
-            self._log.warning(f'No program details for {url}')
             return {}
         details = self._parse_program_details(payload['data'])
         self._cache.set(cache_key, details, 'program')
@@ -119,10 +125,24 @@ class TvMustraHu(EpgScraper):
             return [s.strip() for s in RE_NAME_SEPARATOR.split(value or '')
                     if s.strip()]
 
+        images = d.get('kepek_list') or []
         season = d.get('evad') or ''
         episode = d.get('epizod') or ''
+        # 'hossz' is minutes as a bare int on some channels, 'HH:MM:SS'
+        # on others - normalise to whole minutes.
+        length_min = None
+        hossz = (d.get('hossz') or '').strip()
+        if hossz.isdigit():
+            length_min = hossz
+        else:
+            m = re.fullmatch(r'(\d+):(\d{2}):(\d{2})', hossz)
+            if m:
+                length_min = str(int(m.group(1)) * 60 + int(m.group(2))
+                                 + (1 if int(m.group(3)) >= 30 else 0))
         return {
-            'icon': self._abs_url(d.get('kep')),
+            # th_kepek = thumbnails; the same path under /kepek/ is full-size
+            'icon': self._abs_url(images[0].replace('/th_kepek/', '/kepek/'))
+            if images else None,
             'orig_title': d.get('angolcim') or None,
             'sub_titles': [d['alcim']] if d.get('alcim') else [],
             'descs': [d['tartalom']] if d.get('tartalom') else [],
@@ -133,7 +153,7 @@ class TvMustraHu(EpgScraper):
             'country': d.get('gyartasio') or None,
             'season': int(season) if season.isdigit() else None,
             'episode': int(episode) if episode.isdigit() else None,
-            'length_min': d.get('hossz') or None,
+            'length_min': length_min,
             'age_rating': d.get('kor') or None,
             'previously_shown': bool(d.get('ismetles')),
         }
@@ -190,7 +210,9 @@ class TvMustraHu(EpgScraper):
     def _abs_url(self, src: Optional[str]) -> Optional[str]:
         if not src:
             return None
-        return self._base_url + src if src.startswith('/') else src
+        if src.startswith('/'):
+            return self._base_url + src
+        return src if src.startswith('http') else None
 
     def _get_soup(self, url) -> BeautifulSoup:
         page = self._http.get(url, timeout=self._timeout)
