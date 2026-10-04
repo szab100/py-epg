@@ -54,6 +54,26 @@
   <timespan>7</timespan>
   <pool-size>8</pool-size>
 
+  <!--
+    Supported sites & scrapers:
+      - m.musor.tv   (MusorTvMobile)   - heavily rate-limited (HTTP 429, ~1 req/30s)
+      - tvmustra.hu  (TvMustraHu)      - fast JSON API, no observed rate limit.
+                                       Channel site_id values differ from
+                                       m.musor.tv (e.g. M1 -> M1HD, M2 -> M2HD,
+                                       M4_SPORT -> M4, RTL2 -> RTL_KETTO,
+                                       RTL_GOLD -> RTLGOLD,
+                                       DISCOVERY -> DISCOVERYCHANNEL,
+                                       BBC_EARTH -> BBCEARTH).
+                                       Full list: https://www.tvmustra.hu/
+
+    tvmustra.hu example (recommended):
+    <channel update="i" site="tvmustra.hu" site_id="M1HD" xmltv_id="M1HD.TVMUSTRA.HU">M1 (HD)</channel>
+    <channel update="i" site="tvmustra.hu" site_id="M2HD" xmltv_id="M2HD.TVMUSTRA.HU">M2 / Petőfi (HD)</channel>
+    <channel update="i" site="tvmustra.hu" site_id="DUNA" xmltv_id="DUNA.TVMUSTRA.HU">Duna TV (HD)</channel>
+    <channel update="i" site="tvmustra.hu" site_id="RTL"  xmltv_id="RTL.TVMUSTRA.HU">RTL (HD)</channel>
+    <channel update="i" site="tvmustra.hu" site_id="TV2"  xmltv_id="TV2.TVMUSTRA.HU">TV2 (HD)</channel>
+  -->
+
   <channel update="i" site="m.musor.tv" site_id="M1" xmltv_id="M1.MUSOR.TV">M1 (HD)</channel>
   <channel update="i" site="m.musor.tv" site_id="M2" xmltv_id="M2.MUSOR.TV">M2 / Petőfi (HD)</channel>
   <channel update="i" site="m.musor.tv" site_id="DUNA" xmltv_id="DUNA.MUSOR.TV">Duna TV (HD)</channel>
