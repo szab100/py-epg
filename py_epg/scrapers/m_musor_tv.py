@@ -56,8 +56,9 @@ class MusorTvMobile(EpgScraper):
     def today(self) -> date:
         return datetime.now(tz=self._tz_local).date()
 
-    def fetch_channel(self, chan_site_id, name) -> Channel:
-        channel_id = self._chan_id_tpl.substitute(chan_id=chan_site_id).upper()
+    def fetch_channel(self, chan_site_id, xmltv_id, name) -> Channel:
+        channel_id = xmltv_id or \
+            self._chan_id_tpl.substitute(chan_id=chan_site_id).upper()
         cache_key = f'channel:{self._site_id}:{chan_site_id}'
         cached = self._cache.get(cache_key)
         if cached is not None:
@@ -83,14 +84,13 @@ class MusorTvMobile(EpgScraper):
         programs_selector = 'section[itemscope]'
         programs = []
         for prg in channel_daily_progs_page.select(programs_selector):
-            program = self._get_program(channel_site_id, fetch_date, prg)
+            program = self._get_program(channel.id, fetch_date, prg)
             if program:
                 programs.append(program)
         return programs
 
-    def _get_program(self, chan_site_id: str, fetch_date: date, prg: BeautifulSoup) -> Programme:
+    def _get_program(self, channel_id: str, fetch_date: date, prg: BeautifulSoup) -> Programme:
         # 1. Fetch basic program info from the daily listing page
-        channel_id = self._chan_id_tpl.substitute(chan_id=chan_site_id).upper()
         prg_title = prg.select_one('[itemprop="name"]').get_text(strip=True)
         program = Programme(channel=channel_id,
                             title=[Title(content=[prg_title], lang='hu')],

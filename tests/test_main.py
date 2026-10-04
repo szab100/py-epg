@@ -239,16 +239,16 @@ def cfg_xml(body):
     return ET.ElementTree(ET.fromstring(f'<settings>{body}</settings>'))
 
 
-def chan_el(site='site.hu', site_id='a', name='Chan'):
+def chan_el(site='site.hu', site_id='a', name='Chan', xmltv_id='x'):
     return ET.fromstring(
         f'<channel site="{site}" site_id="{site_id}" '
-        f'xmltv_id="x">{name}</channel>')
+        f'xmltv_id="{xmltv_id}">{name}</channel>')
 
 
 def fake_scraper(channel_id='A.SITE.HU', programmes_per_day=1):
     s = MagicMock()
     s.site_name.return_value = 'site.hu'
-    s.fetch_channel.side_effect = lambda sid, name: Channel(
+    s.fetch_channel.side_effect = lambda sid, xid, name: Channel(
         id=f'{sid}.{channel_id.split(".", 1)[-1]}'.upper(),
         display_name=[DisplayName(content=[name])])
     s.today.return_value = date(2024, 1, 15)
@@ -465,6 +465,16 @@ class TestFetchChannel:
         app._epg_scrapers = {'site.hu': scraper}
         _, programs = app._fetch_channel(chan_el())
         assert len(programs) == 1     # failed day skipped, not fatal
+
+    def test_xmltv_id_passed_to_scraper(self, monkeypatch):
+        patch_worker_identity(monkeypatch)
+        app = make_app()
+        app._config = cfg_xml('<timespan>1</timespan>')
+        scraper = fake_scraper()
+        app._epg_scrapers = {'site.hu': scraper}
+        app._fetch_channel(chan_el(xmltv_id='MY.STABLE.ID'))
+        scraper.fetch_channel.assert_called_once_with(
+            'a', 'MY.STABLE.ID', 'Chan')
 
     def test_unknown_site_raises(self, monkeypatch):
         patch_worker_identity(monkeypatch)

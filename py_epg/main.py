@@ -305,7 +305,7 @@ class PyEPG:
     def _fetch_channel(self, chan) -> Tuple[ChannelKey, List[Programme]]:
         site = chan.attrib['site']
         chan_site_id = chan.attrib['site_id']
-        chan_xmltv_id = chan.attrib['xmltv_id']
+        chan_xmltv_id = chan.attrib.get('xmltv_id')
         chan_name = chan.text
 
         scraper = self._epg_scrapers.get(site)
@@ -313,7 +313,8 @@ class PyEPG:
             raise RuntimeError(f'Could not find scraper for site={site}.')
 
         try:
-            channel = scraper.fetch_channel(chan_site_id, chan_name)
+            channel = scraper.fetch_channel(
+                chan_site_id, chan_xmltv_id, chan_name)
         except requests.RequestException as e:
             # A single broken/missing channel shouldn't abort the whole run.
             self._log.error(

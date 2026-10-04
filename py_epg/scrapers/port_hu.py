@@ -93,7 +93,7 @@ class PortHu(EpgScraper):
             self._cache.set(cache_key, cmap, 'channel')
         return cmap
 
-    def fetch_channel(self, chan_site_id, name) -> Channel:
+    def fetch_channel(self, chan_site_id, xmltv_id, name) -> Channel:
         cache_key = f'channel:{self._site_id}:{chan_site_id}'
         cached = self._cache.get(cache_key)
         if cached is None:
@@ -104,7 +104,7 @@ class PortHu(EpgScraper):
             cached = entry
             self._cache.set(cache_key, cached, 'channel')
         return Channel(
-            id=f'{chan_site_id}.{self._site_id}'.upper(),
+            id=xmltv_id or f'{chan_site_id}.{self._site_id}'.upper(),
             display_name=[DisplayName(content=[name])],
             icon=Icon(src=cached['logo']) if cached.get('logo') else None)
 

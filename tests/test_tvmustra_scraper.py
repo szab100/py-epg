@@ -198,17 +198,24 @@ class TestFetchChannel:
         s._get_soup = MagicMock(return_value=BeautifulSoup(
             '<div class="ch-logo-white-bg"><img src="/logo.png"/></div>',
             'html.parser'))
-        ch = s.fetch_channel('MR1KOSSUTH', 'Kossuth')
+        ch = s.fetch_channel('MR1KOSSUTH', None, 'Kossuth')
         assert ch.id == 'MR1KOSSUTH.TVMUSTRA.HU'
         assert ch.icon.src == 'https://www.tvmustra.hu/logo.png'
-        s.fetch_channel('MR1KOSSUTH', 'Kossuth')   # cached
+        s.fetch_channel('MR1KOSSUTH', None, 'Kossuth')   # cached
         s._get_soup.assert_called_once()
+
+    def test_xmltv_id_overrides_generated_id(self):
+        s = make_scraper()
+        s._get_soup = MagicMock(
+            return_value=BeautifulSoup('<div/>', 'html.parser'))
+        ch = s.fetch_channel('MR1KOSSUTH', 'KOSSUTH.RADIO', 'Kossuth')
+        assert ch.id == 'KOSSUTH.RADIO'
 
     def test_missing_logo_leaves_icon_none(self):
         s = make_scraper()
         s._get_soup = MagicMock(
             return_value=BeautifulSoup('<div/>', 'html.parser'))
-        ch = s.fetch_channel('X', 'n')
+        ch = s.fetch_channel('X', None, 'n')
         assert ch.icon is None
 
 

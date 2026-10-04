@@ -44,8 +44,9 @@ class TvMustraHu(EpgScraper):
     def today(self) -> date:
         return datetime.now(tz=self._tz_local).date()
 
-    def fetch_channel(self, chan_site_id, name) -> Channel:
-        channel_id = self._chan_id_tpl.substitute(chan_id=chan_site_id).upper()
+    def fetch_channel(self, chan_site_id, xmltv_id, name) -> Channel:
+        channel_id = xmltv_id or \
+            self._chan_id_tpl.substitute(chan_id=chan_site_id).upper()
         cache_key = f'channel:{self._site_id}:{chan_site_id}'
         cached = self._cache.get(cache_key)
         if cached is not None:

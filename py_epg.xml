@@ -95,7 +95,13 @@
                        episode-N), so repeat airings cost no extra requests.
        Sites can be mixed freely - this config uses port.hu where available
        and falls back to tvmustra.hu for channels port.hu doesn't carry.
-       See py_epg_tvmustra.xml for the pure-tvmustra lineup. -->
+       See py_epg_tvmustra.xml for the pure-tvmustra lineup.
+
+       xmltv_id is the <channel id="..."> written to the output and the
+       <programme channel="..."> reference; EPG consumers (e.g. Plex)
+       remember channel mappings by this id. Keep it stable when moving
+       a channel between sites or the client-side mapping breaks.
+       The element text becomes the channel's display-name. -->
 
   <channel update="i" site="port.hu" site_id="tvchannel-1" xmltv_id="TVCHANNEL-1.PORT.HU">M1 HD</channel>
   <channel update="i" site="port.hu" site_id="tvchannel-2" xmltv_id="TVCHANNEL-2.PORT.HU">M2 / Petőfi TV</channel>

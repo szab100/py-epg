@@ -278,18 +278,25 @@ class TestFetchChannel:
         s = make_scraper(cache=cache)
         s._get_json = MagicMock(return_value={'channels': [
             {'id': 'tvchannel-1', 'name': 'M1', 'logo': 'http://x/l.png'}]})
-        ch = s.fetch_channel('tvchannel-1', 'M1')
+        ch = s.fetch_channel('tvchannel-1', None, 'M1')
         assert ch.id == 'TVCHANNEL-1.PORT.HU'
         assert ch.icon.src == 'http://x/l.png'
         # channel entry itself is cached - no second API call
-        s.fetch_channel('tvchannel-1', 'M1')
+        s.fetch_channel('tvchannel-1', None, 'M1')
         s._get_json.assert_called_once()
+
+    def test_xmltv_id_overrides_generated_id(self):
+        s = make_scraper()
+        s._get_json = MagicMock(return_value={'channels': [
+            {'id': 'tvchannel-1', 'name': 'M1'}]})
+        ch = s.fetch_channel('tvchannel-1', 'M1HD', 'M1')
+        assert ch.id == 'M1HD'
 
     def test_unknown_id_raises(self):
         s = make_scraper()
         s._get_json = MagicMock(return_value={'channels': []})
         with pytest.raises(requests.RequestException, match='unknown'):
-            s.fetch_channel('tvchannel-999', 'X')
+            s.fetch_channel('tvchannel-999', None, 'X')
 
 
 class TestGetProgramDetails:

@@ -196,16 +196,21 @@ class TestFetchChannel:
         s = make_scraper(cache=cache)
         s._get_soup = MagicMock(return_value=soup(
             '<img class="channelheaderlink" src="/logo.png"/>'))
-        ch = s.fetch_channel('m1', 'M1')
+        ch = s.fetch_channel('m1', None, 'M1')
         assert ch.id == 'M1.M.MUSOR.TV'
         assert ch.icon.src == 'https://m.musor.tv/logo.png'
-        s.fetch_channel('m1', 'M1')  # cached - no second fetch
+        s.fetch_channel('m1', None, 'M1')  # cached - no second fetch
         s._get_soup.assert_called_once()
+
+    def test_xmltv_id_overrides_generated_id(self):
+        s = make_scraper()
+        s._get_soup = MagicMock(return_value=soup('<div/>'))
+        assert s.fetch_channel('m1', 'M1HD', 'M1').id == 'M1HD'
 
     def test_missing_logo_leaves_icon_none(self):
         s = make_scraper()
         s._get_soup = MagicMock(return_value=soup('<div/>'))
-        assert s.fetch_channel('m1', 'M1').icon is None
+        assert s.fetch_channel('m1', None, 'M1').icon is None
 
 
 LISTING_HTML = '''
@@ -237,6 +242,7 @@ class TestFetchPrograms:
         # the second entry (10:00 GMT = 11:00 local on 01-14) is off the
         # requested broadcast day and skipped
         assert [p.title[0].content[0] for p in progs] == ['Reggeli műsor']
+        assert progs[0].channel == 'CH'   # follows channel.id (xmltv_id)
         assert progs[0].start == '20240115060000 +0100'
         assert progs[0].date == '2020'   # from the description field
         s._get_program_details.assert_called_once()
