@@ -179,9 +179,15 @@ class TvMustraHu(EpgScraper):
 
     def _apply_program_details(self, program: Programme, details: dict,
                                title: str = ''):
-        icon = self._resolve_icon(details, title)
-        if icon:
-            program.icon = [Icon(src=icon)]
+        # Artwork is resolved by the main process in a batched parallel
+        # pass - tag the programme with the lookup params. The site's own
+        # image is set now as fallback for programs without a match.
+        if self._metadata:
+            program._meta_lookup = (
+                title, details.get('orig_title'), details.get('date'),
+                details.get('season'), details.get('episode'))
+        if details.get('icon'):
+            program.icon = [Icon(src=details['icon'])]
         if not details:
             return
         if details['orig_title']:
@@ -227,18 +233,6 @@ class TvMustraHu(EpgScraper):
                                      system='tvmustra.hu')]
         if details['previously_shown']:
             program.previously_shown = PreviouslyShown()
-
-    def _resolve_icon(self, details: dict, title: str) -> Optional[str]:
-        # Metadata provider first (consistent quality posters/stills),
-        # falling back to the site's own broadcast image.
-        if self._metadata:
-            icon = self._metadata.icon_for(
-                title, orig_title=details.get('orig_title'),
-                year=details.get('date'), season=details.get('season'),
-                episode=details.get('episode'))
-            if icon:
-                return icon
-        return details.get('icon')
 
     def _abs_url(self, src: Optional[str]) -> Optional[str]:
         if not src:

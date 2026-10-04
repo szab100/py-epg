@@ -9,6 +9,7 @@ from collections import OrderedDict
 import requests
 from requests import adapters
 from urllib3 import util
+from urllib.parse import quote
 
 log = logging.getLogger(__name__)
 
@@ -27,8 +28,10 @@ def normalize_proxy(line: str, default_scheme='http') -> str:
     """
     Normalize a proxy list entry into a full proxy URL.
 
-    Accepts 'scheme://host:port', bare 'host:port' (assumed http) and
-    'scheme,host,port' CSV-style entries. Returns None for unparsable lines.
+    Accepts 'scheme://[user:pass@]host:port', bare 'host:port' (assumed
+    http), authenticated 'host:port:user:pass' and 'user:pass@host:port',
+    plus CSV-style 'scheme,host,port[,user,pass]' and
+    'host,port,user,pass' entries. Returns None for unparsable lines.
     """
     line = line.strip()
     if not line or line.startswith('#'):
@@ -40,7 +43,22 @@ def normalize_proxy(line: str, default_scheme='http') -> str:
         parts = [p.strip() for p in line.split(',')]
         if len(parts) == 3 and parts[0].lower() in KNOWN_SCHEMES:
             return f'{parts[0].lower()}://{parts[1]}:{parts[2]}'
+        if len(parts) == 5 and parts[0].lower() in KNOWN_SCHEMES:
+            return (f'{parts[0].lower()}://{quote(parts[3])}:'
+                    f'{quote(parts[4])}@{parts[1]}:{parts[2]}')
+        if len(parts) == 4:
+            return (f'{default_scheme}://{quote(parts[2])}:'
+                    f'{quote(parts[3])}@{parts[0]}:{parts[1]}')
         return None
+    if '@' in line:
+        # user:pass@host:port
+        return f'{default_scheme}://{line}'
+    parts = line.split(':')
+    if len(parts) >= 4 and parts[1].isdigit():
+        # host:port:user:pass (password may itself contain colons)
+        host, port, user = parts[0], parts[1], parts[2]
+        pwd = ':'.join(parts[3:])
+        return f'{default_scheme}://{quote(user)}:{quote(pwd)}@{host}:{port}'
     return f'{default_scheme}://{line}'
 
 

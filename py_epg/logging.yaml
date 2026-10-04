@@ -23,7 +23,9 @@ handlers:
 
   error_file_handler:
     class: logging.handlers.RotatingFileHandler
-    level: ERROR
+    # WARNING+ - lookup failures/throttling log at warning level and
+    # should still land here, not only hard errors
+    level: WARNING
     formatter: simple
     filename: error.log
     maxBytes: 10485760 # 10MB

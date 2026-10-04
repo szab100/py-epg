@@ -6,6 +6,7 @@ import os
 import pathlib
 import time
 from collections import defaultdict
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import date, timedelta
 from multiprocessing import Pool, current_process
 from pprint import pprint
@@ -15,14 +16,15 @@ import requests
 import tqdm
 from dateutil.parser import parse
 from lxml import etree as ET
-from xmltv.models import Channel, Programme, Tv
+from xmltv.models import (Category, Channel, Country, Desc, Icon,
+                          Programme, Rating, SubTitle, Title, Tv)
 
 from py_epg.common.cache import Cache
 from py_epg.common.xmltv_writer import write_file_from_xml
-from py_epg.common.epg_scraper import EpgScraper
+from py_epg.common.epg_scraper import EpgScraper, UA
 from py_epg.common.metadata import build_metadata
 from py_epg.common.multiprocess_helper import setup_ltree_pickling
-from py_epg.common.proxy import ProxyPool
+from py_epg.common.proxy import ProxyPool, get_proxy_session
 from py_epg.common.requests import get_http_session
 from py_epg.common.types import ChannelKey
 from py_epg.common.utils import argparse_str2bool
@@ -82,8 +84,119 @@ class PyEPG:
                 channels.append(chan_key.channel)
             programs.extend(
                 sorted(prgs, key=lambda prg: prg and prg.start))
+        self._apply_metadata(programs)
         self._post_process_programs(programs)
         return Tv(channels, programs, date=date.today().strftime('%Y%m%d%H%M%S'), generator_info_name='py_epg')
+
+    def _apply_metadata(self, programs: List[Programme]):
+        """
+        Batched metadata resolution: workers tag programmes with
+        '_meta_lookup' params instead of doing inline HTTP lookups, so
+        identical lookups are deduplicated across all channels/airings
+        and resolved here in one thread pool.
+        """
+        if not self._metadata:
+            return
+        by_key = defaultdict(list)
+        for p in programs:
+            args = getattr(p, '_meta_lookup', None)
+            if args is not None:
+                by_key[args].append(p)
+        if not by_key:
+            return
+        cfg = self._config.find('metadata')
+        workers = int(cfg.attrib.get('workers', 8))
+        self._log.info(
+            f'Resolving metadata for {len(by_key)} unique programmes '
+            f'({len(programs)} total) using {workers} threads.')
+        metas = {}
+        done = 0
+        last_log = time.monotonic()
+        with ThreadPoolExecutor(max_workers=workers) as ex:
+            futs = {ex.submit(self._metadata.metadata_for, *args): args
+                    for args in by_key}
+            for fut in tqdm.tqdm(
+                    as_completed(futs), total=len(futs),
+                    disable=not self._args.progress_bar,
+                    desc='Metadata', dynamic_ncols=True):
+                done += 1
+                try:
+                    metas[futs[fut]] = fut.result()
+                except Exception as e:
+                    # a failed lookup is not cached - retried next run
+                    self._log.warning(
+                        f'Metadata lookup failed for '
+                        f'{futs[fut][0]!r}: {e}')
+                # without progress bars, log a heartbeat so long
+                # cold-cache passes don't look stuck
+                if not self._args.progress_bar and \
+                        time.monotonic() - last_log >= 10:
+                    last_log = time.monotonic()
+                    self._log.info(
+                        f'Metadata: {done}/{len(futs)} lookups resolved.')
+        enriched = 0
+        no_match = 0
+        by_provider = defaultdict(int)
+        fields = defaultdict(int)
+        for args, progs in by_key.items():
+            meta = metas.get(args)
+            if not meta:
+                no_match += len(progs)
+                continue
+            by_provider[meta.get('_src', '?')] += len(progs)
+            for p in progs:
+                enriched += self._apply_program_metadata(p, meta, fields)
+        provider_stats = ', '.join(
+            f'{k}={v}' for k, v in sorted(by_provider.items()))
+        field_stats = ', '.join(
+            f'{k}={v}' for k, v in sorted(fields.items()))
+        self._log.info(
+            f'Metadata applied to {enriched} programmes '
+            f'({provider_stats or "none"}), no match for {no_match}. '
+            f'Fields filled: {field_stats or "none"}.')
+
+    @staticmethod
+    def _apply_program_metadata(p: Programme, meta: dict,
+                                fields: dict = None) -> int:
+        """
+        Applies provider fields to a programme: artwork always wins
+        (explicitly preferred), other fields fill gaps only - the EPG
+        source stays authoritative for broadcast-specific data.
+        """
+        applied = []
+        if meta.get('icon'):
+            p.icon = [Icon(src=meta['icon'])]
+            applied.append('icon')
+        if meta.get('orig_title'):
+            existing = {t.content[0] for t in p.title if t.content}
+            if meta['orig_title'] not in existing:
+                p.title.append(Title(content=[meta['orig_title']],
+                                     lang='en'))
+                applied.append('orig_title')
+        if meta.get('episode_title') and not p.sub_title:
+            p.sub_title.append(SubTitle(content=[meta['episode_title']]))
+            applied.append('episode_title')
+        if meta.get('desc') and not p.desc:
+            p.desc.append(Desc(content=[meta['desc']]))
+            applied.append('desc')
+        if meta.get('year') and not p.date:
+            p.date = meta['year']
+            applied.append('year')
+        if meta.get('countries') and not p.country:
+            p.country = [Country(content=[c]) for c in meta['countries']]
+            applied.append('countries')
+        if meta.get('genres') and not p.category:
+            p.category = [Category(content=[g]) for g in meta['genres']]
+            applied.append('genres')
+        if meta.get('rating'):
+            p.rating.append(Rating(value=meta['rating'],
+                                   system=meta.get('rating_system',
+                                                  'metadata')))
+            applied.append('rating')
+        if fields is not None:
+            for f in applied:
+                fields[f] += 1
+        return 1 if applied else 0
 
     def _post_process_programs(self, programs: List[Programme]):
         for i, program in enumerate(programs):
@@ -120,10 +233,12 @@ class PyEPG:
                                      bar_format=bar_format,
                                      postfix={'T': len(programs_by_channel)},
                                      desc=f'{pbar_id: >{PBAR_NAME_COL_WIDTH}}')
-        for (chan_key, chan_progs) in channel_programs:
+        for i, (chan_key, chan_progs) in enumerate(channel_programs, 1):
             programs_by_channel[chan_key].extend(chan_progs)
             self._log.info(
-                f'{chan_key.id}: {len(programs_by_channel[chan_key])} programs successfully grabbed.')
+                f'{chan_key.id}: {len(programs_by_channel[chan_key])} '
+                f'programs successfully grabbed. '
+                f'[{i}/{len(channels)} channels]')
         prog_count = sum([len(listElem)
                          for listElem in programs_by_channel.values()])
         self._log.info(
@@ -222,7 +337,22 @@ class PyEPG:
 
     def _build_metadata(self):
         cfg = self._config.find('metadata')
-        session = get_http_session()
+        # Browser UA - the default 'python-requests' UA gets flagged by
+        # bot protection before rate limits even apply.
+        ua_cfg = self._config.find('user-agent')
+        ua = ua_cfg.text if ua_cfg is not None else UA.random
+        # A configured proxy pool also spreads lookups across egress IPs -
+        # bans are per-IP, so rotation is the only safe way to raise the
+        # request rate.
+        if isinstance(self._proxy, ProxyPool):
+            session = get_proxy_session(pool=self._proxy, user_agent=ua)
+        else:
+            # Fast-fail retry policy: unlike scraping (which retries
+            # through rate-limit bans), a throttled lookup should error
+            # out quickly. Failures are best-effort and never cached.
+            session = get_http_session(
+                proxy=self._proxy, user_agent=ua,
+                retries=1, backoff_factor=0.5, retry_after_max=10)
         return build_metadata(cfg, session=session, cache=self._cache)
 
     def _init_epg_scrapers(self) -> Dict[str, EpgScraper]:

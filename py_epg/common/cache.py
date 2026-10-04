@@ -11,6 +11,7 @@ import json
 import logging
 import os
 import sqlite3
+import threading
 import time
 
 log = logging.getLogger(__name__)
@@ -39,6 +40,9 @@ class Cache:
         self._default_ttl = default_ttl
         self._ttls = ttls or {}
         self._conn = None
+        # Serialises access to the shared connection - check_same_thread=
+        # False permits multi-threaded use but doesn't make it safe.
+        self._lock = threading.RLock()
 
     def _connect(self):
         if self._conn is None:
@@ -54,35 +58,40 @@ class Cache:
     def __getstate__(self):
         state = self.__dict__.copy()
         state['_conn'] = None
+        state['_lock'] = None
         return state
 
     def __setstate__(self, state):
         self.__dict__.update(state)
+        self._lock = threading.RLock()
 
     def get(self, key, default=None):
         if not self._enabled:
             return default
-        row = self._connect().execute(
-            'SELECT value, expires FROM cache WHERE key = ?',
-            (key,)).fetchone()
-        if row is None:
-            return default
-        if row[1] < time.time():
-            self._connect().execute('DELETE FROM cache WHERE key = ?', (key,))
-            self._conn.commit()
-            return default
-        return json.loads(row[0])
+        with self._lock:
+            row = self._connect().execute(
+                'SELECT value, expires FROM cache WHERE key = ?',
+                (key,)).fetchone()
+            if row is None:
+                return default
+            if row[1] < time.time():
+                self._connect().execute(
+                    'DELETE FROM cache WHERE key = ?', (key,))
+                self._conn.commit()
+                return default
+            return json.loads(row[0])
 
     def set(self, key, value, category=None):
         if not self._enabled:
             return
         ttl = self._ttls.get(category, self._default_ttl) \
             if category else self._default_ttl
-        self._connect().execute(
-            'INSERT OR REPLACE INTO cache (key, value, expires) '
-            'VALUES (?, ?, ?)',
-            (key, json.dumps(value), time.time() + ttl))
-        self._conn.commit()
+        with self._lock:
+            self._connect().execute(
+                'INSERT OR REPLACE INTO cache (key, value, expires) '
+                'VALUES (?, ?, ?)',
+                (key, json.dumps(value), time.time() + ttl))
+            self._conn.commit()
 
     def ttl(self, category):
         return self._ttls.get(category, self._default_ttl)
@@ -90,16 +99,18 @@ class Cache:
     def delete_expired(self):
         if not self._enabled:
             return
-        cur = self._connect().execute(
-            'DELETE FROM cache WHERE expires < ?', (time.time(),))
-        self._conn.commit()
-        if cur.rowcount:
-            log.debug(f'Cache: deleted {cur.rowcount} expired entries')
+        with self._lock:
+            cur = self._connect().execute(
+                'DELETE FROM cache WHERE expires < ?', (time.time(),))
+            self._conn.commit()
+            if cur.rowcount:
+                log.debug(f'Cache: deleted {cur.rowcount} expired entries')
 
     def close(self):
-        if self._conn is not None:
-            self._conn.close()
-            self._conn = None
+        with self._lock:
+            if self._conn is not None:
+                self._conn.close()
+                self._conn = None
 
 
 # A disabled cache instance used as a default - get() always misses,
