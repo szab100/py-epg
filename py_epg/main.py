@@ -97,6 +97,7 @@ class PyEPG:
                 channels.append(chan_key.channel)
             programs.extend(
                 sorted(prgs, key=lambda prg: prg and prg.start))
+        programs = self._dedupe_programs(programs)
         self._post_process_programs(programs)
         return Tv(channels, programs,
                   date=date.today().strftime('%Y%m%d%H%M%S'),
@@ -229,6 +230,27 @@ class PyEPG:
             for f in applied:
                 fields[f] += 1
         return 1 if applied else 0
+
+    def _dedupe_programs(self, programs: List[Programme]) -> List[Programme]:
+        """
+        Drops exact duplicate airings (same channel + timeslot). EPG
+        sources occasionally emit the same programme several times in
+        one listing; duplicates produce zero-length programmes after
+        stop synthesis and inflate the output.
+        """
+        seen = set()
+        result = []
+        for p in programs:
+            key = (p.channel, p.start, p.stop)
+            if key in seen:
+                continue
+            seen.add(key)
+            result.append(p)
+        dropped = len(programs) - len(result)
+        if dropped:
+            self._log.info(
+                f'Dropped {dropped} duplicate programme entries.')
+        return result
 
     def _post_process_programs(self, programs: List[Programme]):
         for i, program in enumerate(programs):

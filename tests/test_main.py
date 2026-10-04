@@ -187,3 +187,43 @@ class TestPostProcessPrograms:
         p2.channel = 'OTHER'
         make_app()._post_process_programs([p1, p2])
         assert p1.stop == '20240115235959 +0100'
+
+
+class TestDedupePrograms:
+    def test_exact_duplicates_removed(self):
+        p1 = prog(start='20240115060000 +0100')
+        p2 = prog(start='20240115060000 +0100')
+        p3 = prog(start='20240115060000 +0100')
+        result = make_app()._dedupe_programs([p1, p2, p3])
+        assert result == [p1]
+
+    def test_different_starts_kept(self):
+        p1 = prog(start='20240115060000 +0100')
+        p2 = prog(start='20240115063000 +0100')
+        result = make_app()._dedupe_programs([p1, p2])
+        assert result == [p1, p2]
+
+    def test_different_channels_kept(self):
+        p1 = prog(start='20240115060000 +0100')
+        p2 = prog(start='20240115060000 +0100')
+        p2.channel = 'OTHER'
+        result = make_app()._dedupe_programs([p1, p2])
+        assert result == [p1, p2]
+
+    def test_different_stops_kept(self):
+        p1 = prog(start='20240115060000 +0100')
+        p1.stop = '20240115070000 +0100'
+        p2 = prog(start='20240115060000 +0100')
+        p2.stop = '20240115073000 +0100'
+        result = make_app()._dedupe_programs([p1, p2])
+        assert result == [p1, p2]
+
+    def test_dedup_before_stop_synthesis_fixes_zero_length(self):
+        """Triplicated listings produced start==stop programmes."""
+        p1 = prog(start='20240115060000 +0100')
+        p2 = prog(start='20240115060000 +0100')
+        p3 = prog(start='20240115070000 +0100')
+        app = make_app()
+        programs = app._dedupe_programs([p1, p2, p3])
+        app._post_process_programs(programs)
+        assert programs[0].stop == '20240115070000 +0100'
