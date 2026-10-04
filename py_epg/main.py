@@ -378,6 +378,9 @@ class PyEPG:
             self._log.info(
                 f'Proxy pool configured (url={pool.url}, '
                 f'{len(pool._proxies)} static proxies)')
+            # fetch the list once here so pickled worker copies
+            # inherit it instead of all refreshing simultaneously
+            pool.refresh_list()
             return pool
         proxy = self._config.find('proxy')
         return proxy.text if proxy is not None else None

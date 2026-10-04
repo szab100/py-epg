@@ -6,7 +6,7 @@ import logging
 import sys
 from datetime import date
 from types import SimpleNamespace
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 from lxml import etree as ET
@@ -356,6 +356,19 @@ class TestBuildProxy:
             '</proxy-list>')._build_proxy()
         assert isinstance(pool, ProxyPool)
         assert 'http://a:1' in pool._proxies
+
+    def test_proxy_list_warmed_in_parent(self):
+        """The list is fetched once here so pickled worker copies
+        inherit it instead of all refreshing simultaneously."""
+        resp = MagicMock()
+        resp.text = '1.1.1.1:1\n2.2.2.2:2'
+        resp.raise_for_status.return_value = None
+        with patch('py_epg.common.proxy.requests.get',
+                   return_value=resp) as g:
+            pool = self.app(
+                '<proxy-list url="http://list"/>')._build_proxy()
+        assert g.call_count == 1
+        assert len(pool._proxies) == 2
 
 
 class TestBuildCache:

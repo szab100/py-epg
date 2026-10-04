@@ -156,3 +156,26 @@ class TestIncrement:
 
     def test_disabled_returns_zero(self):
         assert Cache(enabled=False).increment('n') == 0
+
+
+class TestClaim:
+    def test_once_per_window(self, cache):
+        assert cache.claim('k', 60) is True
+        assert cache.claim('k', 60) is False
+        assert cache.claim('k', 60) is False  # losers don't extend it
+
+    def test_expired_claim_reclaimable(self, cache):
+        cache.claim('k', 60)
+        con = cache._connect()
+        con.execute('UPDATE cache SET expires = 0 WHERE key = ?',
+                    ('k',))
+        con.commit()
+        assert cache.claim('k', 60) is True
+
+    def test_deleted_claim_reclaimable(self, cache):
+        cache.claim('k', 60)
+        cache.delete('k')
+        assert cache.claim('k', 60) is True
+
+    def test_disabled_always_grants(self):
+        assert Cache(enabled=False).claim('k', 60) is True

@@ -144,6 +144,28 @@ class Cache:
             conn.commit()
         return int(row[0]) if row else 0
 
+    def claim(self, key, ttl) -> bool:
+        """
+        Atomically claims a once-per-window slot: True for the first
+        caller within `ttl` seconds, False for everyone else until the
+        claim expires. The window is anchored at claim time (loser
+        calls don't extend it), so it can't be starved by traffic.
+        """
+        if not self._enabled:
+            return True  # no shared state - every copy may proceed
+        now = time.time()
+        expires = now + ttl
+        with self._lock:
+            conn = self._connect()
+            cur = conn.execute(
+                '''INSERT INTO cache (key, value, expires)
+                       VALUES (?, '1', ?)
+                   ON CONFLICT(key) DO UPDATE SET expires = ?
+                       WHERE cache.expires < ?''',
+                (key, expires, expires, now))
+            conn.commit()
+            return cur.rowcount == 1
+
     def delete(self, key):
         """Removes a key. No-op when disabled or the key is missing."""
         if not self._enabled:

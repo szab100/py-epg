@@ -348,6 +348,9 @@ class TestSharedRefreshState:
             pool = ProxyPool(url='http://list', refresh=-1,
                              stats_db=cache)
             pool.acquire()
+            # expire the shared refresh claim so the next acquire may
+            # download again (refresh=-1 only bypasses the local gate)
+            cache.delete('proxy:list:claim')
             pool.acquire()
             assert list(pool._proxies) == ['http://9.9.9.9:9']
 

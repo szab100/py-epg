@@ -149,7 +149,10 @@ class ProxyPool:
             except Exception as e:
                 log.debug(f'Failed to write shared proxy state: {e}')
 
-    def _refresh_list(self):
+    def refresh_list(self):
+        """Refresh the list now (subject to the shared claim) - call in
+        the parent before workers spawn so pickled copies inherit a
+        populated list and skip their own refresh."""
         if not self.url:
             return
         now = time.monotonic()
@@ -157,18 +160,16 @@ class ProxyPool:
             return
         self._last_refresh = now
         wall = time.time()
-        state = self._shared_state()
-        if wall - state.get('attempt_ts', 0) < self.refresh:
-            # another worker refreshed recently - adopt its list if
-            # this copy has nothing of its own yet
+        if self._stats_db is not None and not self._stats_db.claim(
+                'proxy:list:claim', max(1, int(self.refresh))):
+            # another worker owns the refresh for this window - adopt
+            # the shared list only if this copy has none of its own.
+            # The claim also suppresses retry storms when the owner's
+            # download itself fails
             if not self._proxies:
-                for line in state.get('lines') or ():
+                for line in self._shared_state().get('lines') or ():
                     self._add(line)
             return
-        # mark the attempt upfront so parallel workers/tasks don't
-        # download the list simultaneously (429s from the provider)
-        self._write_state({'attempt_ts': wall,
-                           'lines': state.get('lines') or []})
         try:
             resp = requests.get(self.url, timeout=self.timeout)
             resp.raise_for_status()
@@ -226,7 +227,7 @@ class ProxyPool:
         """Returns the next healthy proxy URL, or None if the pool is empty."""
         now = time.monotonic()
         with self._lock:
-            self._refresh_list()
+            self.refresh_list()
             if not self._proxies:
                 return None
             keys = list(self._proxies.keys())
