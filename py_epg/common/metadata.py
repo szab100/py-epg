@@ -42,6 +42,9 @@ class MetadataProvider(ABC):
         self._http = session
         self._cache = cache
         self._timeout = timeout
+        # per-process memo - skips the SQLite round-trip for repeated
+        # lookups within a run (same title airing N times)
+        self._memo = {}
 
     @classmethod
     def cfg_opt(cls, cfg, key: str, default: str = '') -> str:
@@ -64,16 +67,24 @@ class MetadataProvider(ABC):
                  year: Optional[str] = None,
                  season: Optional[int] = None,
                  episode: Optional[int] = None) -> Optional[str]:
+        if year:
+            # sources send things like '2021.' - providers get a clean year
+            m = re.search(r'\d{4}', str(year))
+            year = m.group(0) if m else None
         cache_key = self._cache_key(title, orig_title, year,
                                     season, episode)
+        if cache_key in self._memo:
+            return self._memo[cache_key]
         if self._cache is not None:
             hit = self._cache.get(cache_key)
             if hit is not None:
+                self._memo[cache_key] = hit['icon']
                 return hit['icon']
         icon = self._lookup(title, orig_title, year, season, episode)
         if self._cache is not None:
             # negative results are cached too - 'icon': None
             self._cache.set(cache_key, {'icon': icon}, 'meta')
+        self._memo[cache_key] = icon
         return icon
 
     def _cache_key(self, title, orig_title, year, season, episode):

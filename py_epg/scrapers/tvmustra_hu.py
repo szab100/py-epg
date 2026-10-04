@@ -156,6 +156,8 @@ class TvMustraHu(EpgScraper):
             if m:
                 length_min = str(int(m.group(1)) * 60 + int(m.group(2))
                                  + (1 if int(m.group(3)) >= 30 else 0))
+        # gyartasiev arrives in various shapes ('2021', '2021.', '2021-..')
+        year_m = re.search(r'\d{4}', d.get('gyartasiev') or '')
         return {
             # th_kepek = thumbnails; the same path under /kepek/ is full-size
             'icon': self._abs_url(images[0].replace('/th_kepek/', '/kepek/'))
@@ -165,7 +167,7 @@ class TvMustraHu(EpgScraper):
             'descs': [d['tartalom']] if d.get('tartalom') else [],
             'directors': as_list(d.get('rendezo')),
             'actors': as_list(d.get('szereplok')),
-            'date': d.get('gyartasiev') or None,
+            'date': year_m.group(0) if year_m else None,
             'category': d.get('kategoria') or None,
             'country': d.get('gyartasio') or None,
             'season': int(season) if season.isdigit() else None,
