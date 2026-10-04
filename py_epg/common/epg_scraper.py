@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import logging
+import time
 from abc import ABC, abstractmethod
 from datetime import date
 from typing import Dict, List
@@ -21,12 +22,17 @@ class EpgScraper(ABC):
     """Abstract class providing simple methods to fetch XMLTV data from an EPG website."""
 
     def __init__(self, name: str, proxy=None, user_agent=None, cache=None,
-                 metadata=None):
+                 metadata=None, request_delay=0.0):
         super().__init__()
         self._log = logging.getLogger(name)
         self._user_agent = user_agent if user_agent else UA.random
         self._cache = cache if cache is not None else NULL_CACHE
         self._metadata = metadata
+        # Minimum seconds between requests *per worker process* - each
+        # pool worker throttles independently, so aggregate rate is
+        # roughly pool-size / request_delay.
+        self._request_delay = request_delay or 0.0
+        self._last_request = 0.0
         if isinstance(proxy, ProxyPool):
             self._http = get_proxy_session(
                 pool=proxy, user_agent=self._user_agent)
@@ -35,6 +41,15 @@ class EpgScraper(ABC):
             self._http = get_http_session(
                 user_agent=self._user_agent, proxy=proxy)
             self._timeout = 60
+
+    def _throttle(self):
+        """Sleeps until request_delay has elapsed since the last request."""
+        if self._request_delay <= 0:
+            return
+        wait = self._request_delay - (time.monotonic() - self._last_request)
+        if wait > 0:
+            time.sleep(wait)
+        self._last_request = time.monotonic()
 
     @abstractmethod
     def site_name(self) -> str:

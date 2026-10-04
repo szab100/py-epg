@@ -21,6 +21,15 @@ CREATE TABLE IF NOT EXISTS cache (
     key     TEXT PRIMARY KEY,
     value   TEXT NOT NULL,
     expires REAL NOT NULL
+);
+CREATE TABLE IF NOT EXISTS proxy_stats (
+    proxy        TEXT PRIMARY KEY,
+    fails        INTEGER NOT NULL DEFAULT 0,
+    successes    INTEGER NOT NULL DEFAULT 0,
+    last_fail    REAL,
+    last_success REAL,
+    first_seen   REAL NOT NULL,
+    last_seen    REAL NOT NULL
 )
 '''
 
@@ -51,7 +60,10 @@ class Cache:
             self._conn = sqlite3.connect(
                 self._path, timeout=30, check_same_thread=False)
             self._conn.execute('PRAGMA journal_mode=WAL')
-            self._conn.execute(_SCHEMA)
+            # Writers come from many worker processes; wait out short
+            # locks instead of erroring.
+            self._conn.execute('PRAGMA busy_timeout=10000')
+            self._conn.executescript(_SCHEMA)
             self._conn.commit()
         return self._conn
 
@@ -105,6 +117,35 @@ class Cache:
             self._conn.commit()
             if cur.rowcount:
                 log.debug(f'Cache: deleted {cur.rowcount} expired entries')
+
+    def record_proxy_result(self, proxy: str, ok: bool):
+        """
+        Persist a per-proxy success/failure counter (keyed by host:port,
+        no credentials). Best-effort - stats never break a request path.
+        """
+        if not self._enabled:
+            return
+        now = time.time()
+        try:
+            with self._lock:
+                self._connect().execute(
+                    '''INSERT INTO proxy_stats
+                           (proxy, fails, successes, last_fail,
+                            last_success, first_seen, last_seen)
+                       VALUES (?, ?, ?, ?, ?, ?, ?)
+                       ON CONFLICT(proxy) DO UPDATE SET
+                           fails = fails + excluded.fails,
+                           successes = successes + excluded.successes,
+                           last_fail = MAX(COALESCE(last_fail, 0),
+                                           COALESCE(excluded.last_fail, 0)),
+                           last_success = MAX(COALESCE(last_success, 0),
+                                              COALESCE(excluded.last_success, 0)),
+                           last_seen = excluded.last_seen''',
+                    (proxy, 0 if ok else 1, 1 if ok else 0,
+                     None if ok else now, now if ok else None, now, now))
+                self._conn.commit()
+        except sqlite3.Error as e:
+            log.debug(f'Failed to record proxy stat for {proxy}: {e}')
 
     def close(self):
         with self._lock:

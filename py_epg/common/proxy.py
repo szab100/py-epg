@@ -24,6 +24,13 @@ PROXY_FAILURES = (
 )
 
 
+def _display(proxy: str) -> str:
+    """host:port for logging - never log embedded credentials."""
+    host = proxy.rsplit('@', 1)[-1]  # strip user:pass@
+    host = host.split('://', 1)[-1]  # strip scheme if somehow attached
+    return host
+
+
 def normalize_proxy(line: str, default_scheme='http') -> str:
     """
     Normalize a proxy list entry into a full proxy URL.
@@ -73,7 +80,8 @@ class ProxyPool:
     """
 
     def __init__(self, url=None, proxies=(), refresh=300, max_fails=3,
-                 cooldown=600, timeout=10, tries=3, allow_direct=True):
+                 cooldown=600, timeout=10, tries=3, allow_direct=True,
+                 stats_db=None):
         self.url = url
         self.refresh = refresh
         self.max_fails = max_fails
@@ -81,6 +89,9 @@ class ProxyPool:
         self.timeout = timeout
         self.tries = tries
         self.allow_direct = allow_direct
+        # Optional Cache instance for persistent per-proxy stats (the
+        # proxy_stats table - cumulative across runs and processes).
+        self._stats_db = stats_db
         # proxy url -> {'fails', 'success', 'dead_until', 'rtt'}
         self._proxies = OrderedDict()
         self._rr_index = 0
@@ -137,6 +148,8 @@ class ProxyPool:
             return None
 
     def report_success(self, proxy, rtt=None):
+        if self._stats_db is not None:
+            self._stats_db.record_proxy_result(_display(proxy), ok=True)
         with self._lock:
             stats = self._proxies.get(proxy)
             if stats is None:
@@ -149,6 +162,8 @@ class ProxyPool:
                     stats['rtt'] * 0.8 + rtt * 0.2
 
     def report_failure(self, proxy):
+        if self._stats_db is not None:
+            self._stats_db.record_proxy_result(_display(proxy), ok=False)
         now = time.monotonic()
         with self._lock:
             stats = self._proxies.get(proxy)
@@ -158,9 +173,12 @@ class ProxyPool:
             if stats['fails'] >= self.max_fails:
                 stats['dead_until'] = now + self.cooldown
                 stats['fails'] = 0
-                log.debug(
-                    f'Proxy {proxy} marked dead for {self.cooldown}s '
-                    f'after {self.max_fails} consecutive failures')
+                alive = sum(
+                    1 for s in self._proxies.values()
+                    if s['dead_until'] <= now)
+                log.info(
+                    f'Proxy {_display(proxy)} benched for {self.cooldown}s '
+                    f'({alive}/{len(self._proxies)} alive)')
 
     def stats(self):
         now = time.monotonic()
@@ -218,7 +236,8 @@ class RotatingProxySession(requests.Session):
                     # e.g. 403/429: the target site is rate-limiting this
                     # proxy's IP - mark it dead and try the next one.
                     log.debug(
-                        f'Proxy {proxy} got HTTP {resp.status_code} for {url}')
+                        f'Proxy {_display(proxy)} got HTTP '
+                        f'{resp.status_code} for {url}')
                     self._pool.report_failure(proxy)
                     resp.close()
                     last_resp = resp
@@ -226,7 +245,8 @@ class RotatingProxySession(requests.Session):
                 self._pool.report_success(proxy, time.monotonic() - start)
                 return resp
             except PROXY_FAILURES as e:
-                log.debug(f'Proxy {proxy} failed for {url}: {e}')
+                log.debug(
+                    f'Proxy {_display(proxy)} failed for {url}: {e}')
                 self._pool.report_failure(proxy)
                 last_error = e
         if self._pool.allow_direct:

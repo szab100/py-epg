@@ -36,10 +36,10 @@ RE_SINGLE_EPISODE = re.compile(r"([0-9]+)\.")
 
 class MusorTvMobile(EpgScraper):
     def __init__(self, proxy=None, user_agent=None, cache=None,
-                 metadata=None):
+                 metadata=None, request_delay=None):
         super().__init__(name=__name__, proxy=proxy,
                          user_agent=user_agent, cache=cache,
-                         metadata=metadata)
+                         metadata=metadata, request_delay=request_delay)
         self._site_id = "m.musor.tv"
         self._base_url = 'https://m.musor.tv'
         self._page_encoding = 'utf-8'
@@ -247,6 +247,7 @@ class MusorTvMobile(EpgScraper):
                 details['actors'] = separator.split(result.group(4).strip())
 
     def _get_soup(self, url) -> BeautifulSoup:
+        self._throttle()
         page = self._http.get(url, timeout=self._timeout)
         page.raise_for_status()
         return BeautifulSoup(page.text, "html.parser")

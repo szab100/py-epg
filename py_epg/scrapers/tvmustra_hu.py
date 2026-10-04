@@ -29,10 +29,10 @@ class TvMustraHu(EpgScraper):
     """
 
     def __init__(self, proxy=None, user_agent=None, cache=None,
-                 metadata=None):
+                 metadata=None, request_delay=None):
         super().__init__(name=__name__, proxy=proxy,
                          user_agent=user_agent, cache=cache,
-                         metadata=metadata)
+                         metadata=metadata, request_delay=request_delay)
         self._site_id = "tvmustra.hu"
         self._base_url = 'https://www.tvmustra.hu'
         self._chan_id_tpl = Template('$chan_id.' + self._site_id)
@@ -242,11 +242,13 @@ class TvMustraHu(EpgScraper):
         return src if src.startswith('http') else None
 
     def _get_soup(self, url) -> BeautifulSoup:
+        self._throttle()
         page = self._http.get(url, timeout=self._timeout)
         page.raise_for_status()
         return BeautifulSoup(page.text, "html.parser")
 
     def _get_json(self, url) -> dict:
+        self._throttle()
         page = self._http.get(url, timeout=self._timeout)
         page.raise_for_status()
         return page.json()

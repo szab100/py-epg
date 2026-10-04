@@ -57,9 +57,9 @@ class PyEPG:
         self._args = self._parse_args()
         self._log = logging.getLogger(__name__)
         self._config = self._read_config()
-        self._proxy = self._build_proxy()
         self._cache = self._build_cache()
         self._cache.delete_expired()
+        self._proxy = self._build_proxy()
         self._metadata = self._build_metadata()
         self._epg_scrapers = self._init_epg_scrapers()
         setup_ltree_pickling()
@@ -72,8 +72,22 @@ class PyEPG:
 
     def run(self):
         data = self._fetch_data()
-        tv = self._build_xmltv(data)
+        tv, programs = self._build_xmltv(data)
+        # Write a valid file before the best-effort enrichment pass so a
+        # crash or kill during metadata lookups doesn't lose the scrape.
         self._write_xmltv(tv)
+        if self._metadata:
+            try:
+                self._apply_metadata(programs)
+            except Exception as e:
+                self._log.error(f'Metadata pass failed: {e}')
+            self._write_xmltv(tv)
+        if isinstance(self._proxy, ProxyPool):
+            stats = self._proxy.stats()
+            self._log.info(
+                f"Proxy pool: {stats['alive']}/{stats['total']} proxies "
+                'alive at end of run (parent process stats; workers '
+                'maintain their own pools)')
 
     def _build_xmltv(self, data: Dict[ChannelKey, List[Programme]]):
         channels = []
@@ -84,9 +98,10 @@ class PyEPG:
                 channels.append(chan_key.channel)
             programs.extend(
                 sorted(prgs, key=lambda prg: prg and prg.start))
-        self._apply_metadata(programs)
         self._post_process_programs(programs)
-        return Tv(channels, programs, date=date.today().strftime('%Y%m%d%H%M%S'), generator_info_name='py_epg')
+        return Tv(channels, programs,
+                  date=date.today().strftime('%Y%m%d%H%M%S'),
+                  generator_info_name='py_epg'), programs
 
     def _apply_metadata(self, programs: List[Programme]):
         """
@@ -136,10 +151,15 @@ class PyEPG:
                         f'Metadata: {done}/{len(futs)} lookups resolved.')
         enriched = 0
         no_match = 0
+        failed = 0
         by_provider = defaultdict(int)
         fields = defaultdict(int)
         for args, progs in by_key.items():
-            meta = metas.get(args)
+            if args not in metas:
+                # lookup raised - not cached, retried next run
+                failed += len(progs)
+                continue
+            meta = metas[args]
             if not meta:
                 no_match += len(progs)
                 continue
@@ -150,10 +170,12 @@ class PyEPG:
             f'{k}={v}' for k, v in sorted(by_provider.items()))
         field_stats = ', '.join(
             f'{k}={v}' for k, v in sorted(fields.items()))
+        failed_stats = f', {failed} failed (retried next run)' \
+            if failed else ''
         self._log.info(
             f'Metadata applied to {enriched} programmes '
-            f'({provider_stats or "none"}), no match for {no_match}. '
-            f'Fields filled: {field_stats or "none"}.')
+            f'({provider_stats or "none"}), no match for {no_match}'
+            f'{failed_stats}. Fields filled: {field_stats or "none"}.')
 
     @staticmethod
     def _apply_program_metadata(p: Programme, meta: dict,
@@ -200,7 +222,10 @@ class PyEPG:
 
     def _post_process_programs(self, programs: List[Programme]):
         for i, program in enumerate(programs):
-            # Set stop times
+            # Keep real stop times when the source provides them
+            # (port.hu); otherwise synthesize from the next start time.
+            if program.stop:
+                continue
             if i < len(programs) - 1 and programs[i + 1].channel == program.channel:
                 program.stop = programs[i + 1].start
             else:
@@ -313,7 +338,8 @@ class PyEPG:
                 timeout=int(pool_cfg.attrib.get('timeout', 10)),
                 tries=int(pool_cfg.attrib.get('tries', 3)),
                 allow_direct=argparse_str2bool(
-                    pool_cfg.attrib.get('allow-direct', 'true')))
+                    pool_cfg.attrib.get('allow-direct', 'true')),
+                stats_db=self._cache)
             self._log.info(
                 f'Proxy pool configured (url={pool.url}, '
                 f'{len(pool._proxies)} static proxies)')
@@ -359,11 +385,15 @@ class PyEPG:
         result = {}
         implementations = EpgScraper.__subclasses__()
         user_agent = self._config.find('user-agent')
+        delay_cfg = self._config.find('request-delay')
+        request_delay = float(delay_cfg.text) \
+            if delay_cfg is not None and delay_cfg.text else None
         for scraper_class in implementations:
             obj = scraper_class(proxy=self._proxy,
                                 user_agent=user_agent.text if user_agent is not None else None,
                                 cache=self._cache,
-                                metadata=self._metadata)
+                                metadata=self._metadata,
+                                request_delay=request_delay)
             result[obj.site_name()] = obj
         return result
 
