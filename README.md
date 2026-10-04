@@ -10,7 +10,11 @@
     * config management
     * logging
     * build & write XMLTV (with auto-generated fields, eg 'stop')
-    * proxy server support
+    * single proxy or **rotating proxy pool** support (with remote proxy-list
+      fetching, per-request rotation, timeouts, retries and a circuit
+      breaker that auto-disables failing proxies)
+    * **persistent caching** (SQLite) of slow-changing data (channel logos,
+      program details) with configurable TTLs
     * auto http/s retries
     * random fake user_agents
 * 🚀 Save time by fetching channels in parallel (caution: use proxy server(s) to avoid getting blacklisted)!
@@ -29,6 +33,9 @@
 2. Create configuration: py_epg.xml
     - Add all your channels (see [sample config](https://github.com/szab100/py-epg/blob/main/py_epg.xml)).
     - Make sure there is a corresponding site scraper implementation in [py_epg/scrapers](https://github.com/szab100/py-epg/tree/main/py_epg/scrapers) for each channels ('site' attribute).
+    - Optionally configure a `<cache>` (persistent caching with TTLs) and a
+      `<proxy-list>` (rotating proxy pool with circuit breaker) - see the
+      comments in the sample config for all supported attributes.
 3. Run:
     ```sh
     $ python3 -m py_epg -c </path/to/your/py_epg.xml> -p

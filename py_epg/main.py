@@ -4,7 +4,6 @@ import argparse
 import logging
 import os
 import pathlib
-import sys
 import time
 from collections import defaultdict
 from datetime import date, timedelta
@@ -20,8 +19,10 @@ from lxml import etree as ET
 from xmltv import xmltv_helpers
 from xmltv.models import Channel, Programme, Tv
 
+from py_epg.common.cache import Cache
 from py_epg.common.epg_scraper import EpgScraper
 from py_epg.common.multiprocess_helper import setup_ltree_pickling
+from py_epg.common.proxy import ProxyPool
 from py_epg.common.types import ChannelKey
 from py_epg.common.utils import argparse_str2bool
 from py_epg.scrapers import *
@@ -37,6 +38,9 @@ class PyEPG:
         self._args = self._parse_args()
         self._log = logging.getLogger(__name__)
         self._config = self._read_config()
+        self._proxy = self._build_proxy()
+        self._cache = self._build_cache()
+        self._cache.delete_expired()
         self._epg_scrapers = self._init_epg_scrapers()
         setup_ltree_pickling()
         pool_size = self._config.find('pool-size')
@@ -116,6 +120,7 @@ class PyEPG:
             raise RuntimeError(f'Could not find scraper for site={site}.')
 
         channel = scraper.fetch_channel(chan_site_id, chan_name)
+        key = ChannelKey(channel.id, channel)
         today = scraper.today()
         days = int(self._config.find('timespan').text)
 
@@ -136,22 +141,64 @@ class PyEPG:
                                desc=f'{pbar_id: >{PBAR_NAME_COL_WIDTH}}')
         for i in days_range:
             fetch_date = today + timedelta(days=i)
-            day_programs = scraper.fetch_programs(
-                channel, chan_site_id, fetch_date)
-            key = ChannelKey(channel.id, channel)
+            try:
+                day_programs = scraper.fetch_programs(
+                    channel, chan_site_id, fetch_date)
+            except requests.RequestException as e:
+                self._log.error(
+                    f'{chan_site_id}: failed to fetch programs for '
+                    f'{fetch_date}: {e}')
+                continue
             programs.extend(day_programs)
             self._log.debug(
                 f'{chan_site_id}: grabbed {len(day_programs)} programs for date {fetch_date}.')
         return key, programs
 
+    def _build_proxy(self):
+        """
+        Returns a ProxyPool when <proxy-list> is configured, a proxy URL
+        string for a single static <proxy>, or None.
+        """
+        pool_cfg = self._config.find('proxy-list')
+        if pool_cfg is not None:
+            pool = ProxyPool(
+                url=pool_cfg.attrib.get('url'),
+                proxies=[p.text.strip()
+                         for p in pool_cfg.findall('proxy') if p.text],
+                refresh=int(pool_cfg.attrib.get('refresh', 300)),
+                max_fails=int(pool_cfg.attrib.get('max-fails', 3)),
+                cooldown=int(pool_cfg.attrib.get('cooldown', 600)),
+                timeout=int(pool_cfg.attrib.get('timeout', 10)),
+                tries=int(pool_cfg.attrib.get('tries', 3)),
+                allow_direct=argparse_str2bool(
+                    pool_cfg.attrib.get('allow-direct', 'true')))
+            self._log.info(
+                f'Proxy pool configured (url={pool.url}, '
+                f'{len(pool._proxies)} static proxies)')
+            return pool
+        proxy = self._config.find('proxy')
+        return proxy.text if proxy is not None else None
+
+    def _build_cache(self) -> Cache:
+        cfg = self._config.find('cache')
+        if cfg is None or not argparse_str2bool(
+                cfg.attrib.get('enabled', 'true')):
+            return Cache(enabled=False)
+        return Cache(
+            path=cfg.attrib.get('file', 'epg_cache.sqlite'),
+            ttls={
+                'channel': int(cfg.attrib.get('channel-ttl', 604800)),
+                'program': int(cfg.attrib.get('program-ttl', 2592000)),
+            })
+
     def _init_epg_scrapers(self) -> Dict[str, EpgScraper]:
         result = {}
         implementations = EpgScraper.__subclasses__()
-        proxy = self._config.find('proxy')
         user_agent = self._config.find('user-agent')
         for scraper_class in implementations:
-            obj = scraper_class(proxy=proxy.text if proxy is not None else None,
-                                user_agent=user_agent.text if user_agent is not None else None)
+            obj = scraper_class(proxy=self._proxy,
+                                user_agent=user_agent.text if user_agent is not None else None,
+                                cache=self._cache)
             result[obj.site_name()] = obj
         return result
 

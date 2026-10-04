@@ -1,0 +1,107 @@
+#!/usr/bin/env python3
+"""Persistent, TTL-based JSON cache backed by SQLite.
+
+The cache connection is opened lazily so that Cache objects can be pickled
+into multiprocessing workers - each process opens its own connection to the
+same database file (SQLite handles concurrent access; WAL mode + busy
+timeout reduce lock contention).
+"""
+
+import json
+import logging
+import os
+import sqlite3
+import time
+
+log = logging.getLogger(__name__)
+
+_SCHEMA = '''
+CREATE TABLE IF NOT EXISTS cache (
+    key     TEXT PRIMARY KEY,
+    value   TEXT NOT NULL,
+    expires REAL NOT NULL
+)
+'''
+
+
+class Cache:
+    """
+    A simple persistent key/value cache.
+
+    Values are stored as JSON. `ttl`s are per-category seconds; the
+    'default' category is used when no category is given.
+    """
+
+    def __init__(self, path='epg_cache.sqlite', ttls=None, enabled=True,
+                 default_ttl=86400):
+        self._path = path
+        self._enabled = enabled
+        self._default_ttl = default_ttl
+        self._ttls = ttls or {}
+        self._conn = None
+
+    def _connect(self):
+        if self._conn is None:
+            os.makedirs(os.path.dirname(os.path.abspath(self._path)),
+                        exist_ok=True)
+            self._conn = sqlite3.connect(
+                self._path, timeout=30, check_same_thread=False)
+            self._conn.execute('PRAGMA journal_mode=WAL')
+            self._conn.execute(_SCHEMA)
+            self._conn.commit()
+        return self._conn
+
+    def __getstate__(self):
+        state = self.__dict__.copy()
+        state['_conn'] = None
+        return state
+
+    def __setstate__(self, state):
+        self.__dict__.update(state)
+
+    def get(self, key, default=None):
+        if not self._enabled:
+            return default
+        row = self._connect().execute(
+            'SELECT value, expires FROM cache WHERE key = ?',
+            (key,)).fetchone()
+        if row is None:
+            return default
+        if row[1] < time.time():
+            self._connect().execute('DELETE FROM cache WHERE key = ?', (key,))
+            self._conn.commit()
+            return default
+        return json.loads(row[0])
+
+    def set(self, key, value, category=None):
+        if not self._enabled:
+            return
+        ttl = self._ttls.get(category, self._default_ttl) \
+            if category else self._default_ttl
+        self._connect().execute(
+            'INSERT OR REPLACE INTO cache (key, value, expires) '
+            'VALUES (?, ?, ?)',
+            (key, json.dumps(value), time.time() + ttl))
+        self._conn.commit()
+
+    def ttl(self, category):
+        return self._ttls.get(category, self._default_ttl)
+
+    def delete_expired(self):
+        if not self._enabled:
+            return
+        cur = self._connect().execute(
+            'DELETE FROM cache WHERE expires < ?', (time.time(),))
+        self._conn.commit()
+        if cur.rowcount:
+            log.debug(f'Cache: deleted {cur.rowcount} expired entries')
+
+    def close(self):
+        if self._conn is not None:
+            self._conn.close()
+            self._conn = None
+
+
+# A disabled cache instance used as a default - get() always misses,
+# set() is a no-op.
+NULL_CACHE = Cache(enabled=False)

@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
 import logging
 import re
-from datetime import date
+from datetime import date, datetime
 from pprint import pprint
 from string import Template
 from typing import List
 
+import requests
 import roman
 from bs4 import BeautifulSoup
-from datetime import datetime
 from dateutil import tz
 from dateutil.parser import parse
 from py_epg.common.epg_scraper import EpgScraper
@@ -35,8 +35,9 @@ RE_SINGLE_EPISODE = re.compile(r"([0-9]+)\.")
 
 
 class MusorTvMobile(EpgScraper):
-    def __init__(self, proxy=None, user_agent=None):
-        super().__init__(name=__name__, proxy=proxy, user_agent=user_agent)
+    def __init__(self, proxy=None, user_agent=None, cache=None):
+        super().__init__(name=__name__, proxy=proxy,
+                         user_agent=user_agent, cache=cache)
         self._site_id = "m.musor.tv"
         self._base_url = 'https://m.musor.tv'
         self._page_encoding = 'utf-8'
@@ -53,14 +54,20 @@ class MusorTvMobile(EpgScraper):
         return datetime.now(tz=self._tz_local).date()
 
     def fetch_channel(self, chan_site_id, name) -> Channel:
-        today_str = self.today().strftime("%Y.%m.%d")
-        url = self._day_url_tpl.substitute(
-            chan_site_id=chan_site_id, date=today_str)
-        soup = self._get_soup(url)
         channel_id = self._chan_id_tpl.substitute(chan_id=chan_site_id).upper()
-        channel_logo = soup.select_one('img.channelheaderlink')
-        channel_logo_src = self._base_url + \
-            channel_logo.attrs['src'] if channel_logo else None
+        cache_key = f'channel:{self._site_id}:{chan_site_id}'
+        cached = self._cache.get(cache_key)
+        if cached is not None:
+            channel_logo_src = cached['icon']
+        else:
+            today_str = self.today().strftime("%Y.%m.%d")
+            url = self._day_url_tpl.substitute(
+                chan_site_id=chan_site_id, date=today_str)
+            soup = self._get_soup(url)
+            channel_logo = soup.select_one('img.channelheaderlink')
+            channel_logo_src = self._base_url + \
+                channel_logo.attrs['src'] if channel_logo else None
+            self._cache.set(cache_key, {'icon': channel_logo_src}, 'channel')
         return Channel(
             id=channel_id,
             display_name=[DisplayName(content=[name])],
@@ -94,17 +101,64 @@ class MusorTvMobile(EpgScraper):
         if prg_start.date() != fetch_date:
             return None
 
-        # 2. Fetch extended program info from program details page
+        # 2. Fetch extended program info from program details page (cached)
         prg_details_link = prg.select_one(
             'h3.wideprogentry_progtitle > a').attrs['href']
-        prg_details_page = self._get_soup(self._base_url + prg_details_link)
-
-        self._set_prg_icon(program, prg_details_page)
-        self._set_prg_fields_from_mixed_description(program, prg_details_page)
+        details = self._get_program_details(self._base_url + prg_details_link)
+        self._apply_program_details(program, details)
 
         self._log.trace(
             f'New program CH: {channel_id} ENC: {prg.original_encoding} P: {prg_title}')
         return program
+
+    def _get_program_details(self, url) -> dict:
+        cache_key = f'program:{url}'
+        cached = self._cache.get(cache_key)
+        if cached is not None:
+            return cached
+        try:
+            prg_details_page = self._get_soup(url)
+        except requests.RequestException as e:
+            # Extended details are best-effort: a failed detail page still
+            # leaves the program with its listing data (title, start, etc).
+            self._log.warning(f'Failed to fetch program details {url}: {e}')
+            return {'icon': None, 'orig_title': None, 'sub_titles': [],
+                    'descs': [], 'directors': [], 'actors': []}
+        details = self._parse_program_details(prg_details_page)
+        self._cache.set(cache_key, details, 'program')
+        return details
+
+    def _parse_program_details(self, prg_details_page) -> dict:
+        """Extracts cacheable fields from a program details page."""
+        details = {'icon': None, 'orig_title': None, 'sub_titles': [],
+                   'descs': [], 'directors': [], 'actors': []}
+        prg_icon = prg_details_page.select_one('img[itemprop="image"]')
+        if prg_icon:
+            details['icon'] = self._base_url + prg_icon.attrs['src']
+
+        desc_elem = prg_details_page.select_one('div.eventinfolongdescinner')
+        if desc_elem is not None:
+            self._parse_mixed_description(details, clean_text(desc_elem).strip())
+        return details
+
+    def _apply_program_details(self, program, details):
+        if details['icon']:
+            program.icon = [Icon(src=details['icon'])]
+        if details['orig_title']:
+            program.title.append(
+                Title(content=[details['orig_title']], lang='en'))
+        for sub_title in details['sub_titles']:
+            program.sub_title.append(SubTitle(content=[sub_title]))
+        for desc in details['descs']:
+            program.desc.append(Desc(content=[desc]))
+        if details['directors'] or details['actors']:
+            credits = Credits()
+            if details['directors']:
+                credits.director = details['directors']
+            if details['actors']:
+                credits.actor = [Actor(content=[a])
+                                 for a in details['actors']]
+            program.credits = credits
 
     def _set_prg_start(self, program, prg):
         start = prg.select_one(
@@ -157,55 +211,40 @@ class MusorTvMobile(EpgScraper):
                 else:
                     program.sub_title = [SubTitle(content=[subtitle])]
 
-    def _set_prg_icon(self, program, prg_details_page):
-        prg_icon = prg_details_page.select_one('img[itemprop="image"]')
-        if prg_icon:
-            program.icon = [Icon(src=self._base_url + prg_icon.attrs['src'])]
+    def _parse_mixed_description(self, details, prg_mixed_desc):
+        if not prg_mixed_desc:
+            return
+        if len(prg_mixed_desc.splitlines()) == 1:
+            details['descs'].append(prg_mixed_desc)
+            return
 
-    def _set_prg_fields_from_mixed_description(self, program, prg_details_page):
-        prg_mixed_desc = clean_text(
-            prg_details_page.select_one('div.eventinfolongdescinner')).strip()
+        result = RE_MIXED_DESCRIPTION.search(prg_mixed_desc)
+        if result and len(result.groups()):
+            # title in orig lang
+            if result.group(1):
+                details['orig_title'] = result.group(1)
 
-        if prg_mixed_desc:
-            if len(prg_mixed_desc.splitlines()) == 1:
-                program.desc.append(Desc(content=[prg_mixed_desc]))
-                return
-
-            # pprint(prg_mixed_desc)
-            result = RE_MIXED_DESCRIPTION.search(prg_mixed_desc)
-            if result and len(result.groups()):
-                # pprint(result.groups())
-                # title in orig lang
-                if result.group(1):
-                    program.title.append(
-                        Title(content=[result.group(1)], lang='en'))
-
-                if result.group(2):
-                    content = result.group(2).strip()
-                    parts = content.split('\n\n')
-                    if len(parts) >= 2:
-                        # sub-title + description
-                        program.sub_title.append(
-                            SubTitle(content=[parts[0].strip()]))
-                        desc = '\n'.join(parts[1:]).strip()
-                        if desc:
-                            program.desc.append(Desc(content=[desc]))
-                    elif content:
-                        # description only
-                        program.desc.append(Desc(content=[content]))
-                # director, cast
-                if result.group(3) or result.group(4):
-                    separator = re.compile('[,;]+ ')
-                    credits = Credits()
-                    if result.group(3):
-                        credits.director = separator.split(
-                            result.group(3).strip())
-                    if result.group(4):
-                        actors = separator.split(result.group(4).strip())
-                        credits.actor = [Actor(content=[actor])
-                                         for actor in actors]
-                    program.credits = credits
+            if result.group(2):
+                content = result.group(2).strip()
+                parts = content.split('\n\n')
+                if len(parts) >= 2:
+                    # sub-title + description
+                    details['sub_titles'].append(parts[0].strip())
+                    desc = '\n'.join(parts[1:]).strip()
+                    if desc:
+                        details['descs'].append(desc)
+                elif content:
+                    # description only
+                    details['descs'].append(content)
+            # director, cast
+            separator = re.compile('[,;]+ ')
+            if result.group(3):
+                details['directors'] = separator.split(
+                    result.group(3).strip())
+            if result.group(4):
+                details['actors'] = separator.split(result.group(4).strip())
 
     def _get_soup(self, url) -> BeautifulSoup:
-        page = self._http.get(url, timeout=60)
+        page = self._http.get(url, timeout=self._timeout)
+        page.raise_for_status()
         return BeautifulSoup(page.text, "html.parser")

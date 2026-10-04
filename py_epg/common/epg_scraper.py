@@ -9,6 +9,8 @@ from datetime import date
 from typing import Dict, List
 
 from fake_useragent import UserAgent
+from py_epg.common.cache import NULL_CACHE
+from py_epg.common.proxy import ProxyPool, get_proxy_session
 from py_epg.common.requests import get_http_session
 from xmltv.models import Channel, Programme
 
@@ -18,11 +20,19 @@ UA = UserAgent()
 class EpgScraper(ABC):
     """Abstract class providing simple methods to fetch XMLTV data from an EPG website."""
 
-    def __init__(self, name: str, proxy=None, user_agent=None):
+    def __init__(self, name: str, proxy=None, user_agent=None, cache=None):
         super().__init__()
         self._log = logging.getLogger(name)
         self._user_agent = user_agent if user_agent else UA.random
-        self._http = get_http_session(user_agent=self._user_agent, proxy=proxy)
+        self._cache = cache if cache is not None else NULL_CACHE
+        if isinstance(proxy, ProxyPool):
+            self._http = get_proxy_session(
+                pool=proxy, user_agent=self._user_agent)
+            self._timeout = proxy.timeout
+        else:
+            self._http = get_http_session(
+                user_agent=self._user_agent, proxy=proxy)
+            self._timeout = 60
 
     @abstractmethod
     def site_name(self) -> str:

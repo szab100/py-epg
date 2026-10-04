@@ -27,6 +27,7 @@ tqdm = "^4.67.0"
 setuptools = "<81"
 # py-xmltv models were generated for the 21.x xsdata API
 xsdata = "^21.9"
+pysocks = "^1.7.1"
 
 [tool.poetry.scripts]
 epg = "py_epg.main:main"

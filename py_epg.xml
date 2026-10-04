@@ -1,7 +1,53 @@
 <?xml version="1.0"?>
 <settings>
   <filename>epg.xml</filename>
+  <!-- Optional: single static proxy for all requests -->
   <!-- <proxy>http://172.18.0.20:3128</proxy> -->
+
+  <!-- Optional: rotating proxy pool (takes precedence over <proxy>).
+       Every request goes through a different healthy proxy from the list.
+       Attributes:
+         url          fetch a proxy list from this URL and merge it into the
+                      pool (one proxy per line; 'scheme://host:port' or bare
+                      'host:port' = http, or 'scheme,host,port'; schemes:
+                      http, https, socks4, socks4a, socks5, socks5h)
+         refresh      re-fetch the list every N seconds (default 300)
+         timeout      connect/read timeout per request in seconds (default 10)
+         tries        how many different proxies to try per request before
+                      giving up (default 3)
+         max-fails    consecutive failures before a proxy is disabled
+                      (default 3)
+         cooldown     seconds a disabled proxy is skipped before being
+                      probed again (default 600)
+         allow-direct fall back to a direct connection when no healthy
+                      proxy is left (default true)
+       Inline <proxy> children can seed extra static proxies.
+       Example list source (http/socks4/socks5, refreshed every 5min):
+         https://cdn.jsdelivr.net/gh/proxyscrape/free-proxy-list@main/proxies/all/data.txt
+  -->
+  <!--
+  <proxy-list url="https://cdn.jsdelivr.net/gh/proxyscrape/free-proxy-list@main/proxies/all/data.txt"
+              refresh="300" timeout="10" tries="3" max-fails="3"
+              cooldown="600" allow-direct="true">
+    <proxy>socks5://127.0.0.1:9050</proxy>
+  </proxy-list>
+  -->
+
+  <!-- Optional: persistent cache (SQLite). Skips re-fetching data that
+       rarely changes, so subsequent runs are much faster.
+       Attributes:
+         file         path of the sqlite db (default epg_cache.sqlite)
+         enabled      enable/disable caching (default true)
+         channel-ttl  seconds channel data (logo) stays valid
+                      (default 604800 = 7 days)
+         program-ttl  seconds program detail data (description, credits,
+                      icon) stays valid (default 2592000 = 30 days)
+       Transient data (title, start/stop times, season/episode numbers) is
+       always fetched fresh.
+  -->
+  <cache file="epg_cache.sqlite" enabled="true"
+         channel-ttl="604800" program-ttl="2592000"/>
+
   <!-- leave empty to use randomly selected fake user_agent values -->
   <user-agent></user-agent>
   <!-- # of days to fetch programs for each channel -->
