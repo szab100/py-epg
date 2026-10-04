@@ -324,9 +324,27 @@ class TestGetProgramDetails:
 
     def test_cached_value_returned(self, cache):
         s = make_scraper(cache=cache)
-        cache.set('program:port.hu:movie-1', {'desc': 'd'}, 'program')
+        cache.set('program:port.hu:x', {'desc': 'd'}, 'program')
         assert s._get_program_details('movie-1', '/film/x') == \
             {'desc': 'd'}
+
+    def test_cache_key_derived_from_film_url_not_content_id(self):
+        """Stale listings may carry a series-level content_id (the old
+        film_id preference) - the detail cache must still distinguish
+        episodes by the page actually fetched."""
+        s = make_scraper()
+        def page(desc):
+            return ('<script type="application/ld+json">'
+                    f'{{"description": "{desc}"}}</script>')
+
+        s._get_text = MagicMock(side_effect=[page('ep100'),
+                                             page('ep200')])
+        d1 = s._get_program_details(
+            'movie-1', '/adatlap/x/event-1/episode-100')
+        d2 = s._get_program_details(
+            'movie-1', '/adatlap/x/event-2/episode-200')
+        assert s._get_text.call_count == 2
+        assert d1['desc'] == 'ep100' and d2['desc'] == 'ep200'
 
     def test_fetch_failure_returns_empty(self):
         s = make_scraper()

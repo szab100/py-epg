@@ -172,7 +172,12 @@ class PortHu(EpgScraper):
     def _get_program_details(self, content_id, film_url) -> dict:
         if not film_url:
             return {}
-        cache_key = f'program:{self._site_id}:{content_id}'
+        # key on the page being fetched (film_url's trailing episode-N
+        # /movie-N id), not the stored content_id: the listing API's
+        # film_id is series-level for episodes and cached listings may
+        # carry a stale content_id
+        key_id = film_url.rsplit('/', 1)[-1] or content_id
+        cache_key = f'program:{self._site_id}:{key_id}'
         cached = self._cache.get(cache_key)
         if cached is not None:
             return cached
