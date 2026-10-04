@@ -77,6 +77,11 @@ class ProxyPool:
     a row is skipped for `cooldown` seconds, then retried automatically.
     If `url` is set, the list is (re)fetched every `refresh` seconds, keeping
     failure stats for proxies that are still present.
+
+    Pool copies get pickled into every worker/task, so bench state and
+    list-refresh timing are shared through the stats DB - otherwise
+    each task would independently re-discover dead proxies and
+    re-download the list.
     """
 
     def __init__(self, url=None, proxies=(), refresh=300, max_fails=3,
@@ -98,13 +103,14 @@ class ProxyPool:
         self._last_refresh = 0.0
         self._lock = threading.Lock()
         for p in proxies or ():
-            self._add(p)
+            self._add(p, static=True)
 
-    def _add(self, proxy):
+    def _add(self, proxy, static=False):
         normalized = normalize_proxy(proxy)
         if normalized and normalized not in self._proxies:
             self._proxies[normalized] = {
-                'fails': 0, 'success': 0, 'dead_until': 0.0, 'rtt': 0.0}
+                'fails': 0, 'success': 0, 'dead_until': 0.0, 'rtt': 0.0,
+                'static': static}
 
     def __getstate__(self):
         state = self.__dict__.copy()
@@ -115,34 +121,92 @@ class ProxyPool:
         self.__dict__.update(state)
         self._lock = threading.Lock()
 
-    def _refresh_list(self, now):
-        if not self.url or now - self._last_refresh < self.refresh:
+    def _shared_state(self) -> dict:
+        """Last list-download attempt/list shared via the stats DB -
+        pool copies pickled into workers/tasks would otherwise each
+        fire their own refresh on first acquire."""
+        if self._stats_db is None:
+            return {}
+        try:
+            return self._stats_db.get('proxy:list:state') or {}
+        except Exception as e:
+            log.debug(f'Failed to read shared proxy state: {e}')
+            return {}
+
+    def _write_state(self, state):
+        if self._stats_db is not None:
+            try:
+                self._stats_db.set('proxy:list:state', state, 'listing')
+            except Exception as e:
+                log.debug(f'Failed to write shared proxy state: {e}')
+
+    def _refresh_list(self):
+        if not self.url:
+            return
+        now = time.monotonic()
+        if now - self._last_refresh < self.refresh:
             return
         self._last_refresh = now
+        wall = time.time()
+        state = self._shared_state()
+        if wall - state.get('attempt_ts', 0) < self.refresh:
+            # another worker refreshed recently - adopt its list if
+            # this copy has nothing of its own yet
+            if not self._proxies:
+                for line in state.get('lines') or ():
+                    self._add(line)
+            return
+        # mark the attempt upfront so parallel workers/tasks don't
+        # download the list simultaneously (429s from the provider)
+        self._write_state({'attempt_ts': wall,
+                           'lines': state.get('lines') or []})
         try:
             resp = requests.get(self.url, timeout=self.timeout)
             resp.raise_for_status()
+            lines = resp.text.splitlines()
         except requests.RequestException as e:
             log.warning(f'Failed to refresh proxy list from {self.url}: {e}')
             return
         before = len(self._proxies)
-        for line in resp.text.splitlines():
-            self._add(line)
+        fresh = set()
+        for line in lines:
+            normalized = normalize_proxy(line)
+            if normalized:
+                fresh.add(normalized)
+                self._add(normalized)
+        # drop list proxies that disappeared (statically configured
+        # ones always stay)
+        if fresh:
+            for p in list(self._proxies):
+                if p not in fresh and not self._proxies[p]['static']:
+                    del self._proxies[p]
         log.info(
             f'Proxy list refreshed: {len(self._proxies)} proxies '
             f'({len(self._proxies) - before} new) from {self.url}')
+        self._write_state({'attempt_ts': wall, 'lines': lines})
+
+    def _alive(self, key, now) -> bool:
+        if self._proxies[key]['dead_until'] > now:
+            return False
+        # benches are shared through the stats DB so a proxy marked
+        # dead by one worker is skipped by all pool copies
+        if self._stats_db is not None:
+            until = self._stats_db.get(f'proxy:dead:{_display(key)}')
+            if until and until > time.time():
+                return False
+        return True
 
     def acquire(self) -> str:
         """Returns the next healthy proxy URL, or None if the pool is empty."""
         now = time.monotonic()
         with self._lock:
-            self._refresh_list(now)
+            self._refresh_list()
             if not self._proxies:
                 return None
             keys = list(self._proxies.keys())
             for i in range(len(keys)):
                 idx = (self._rr_index + i) % len(keys)
-                if self._proxies[keys[idx]]['dead_until'] <= now:
+                if self._alive(keys[idx], now):
                     self._rr_index = (idx + 1) % len(keys)
                     return keys[idx]
             return None
@@ -150,6 +214,9 @@ class ProxyPool:
     def report_success(self, proxy, rtt=None):
         if self._stats_db is not None:
             self._stats_db.record_proxy_result(_display(proxy), ok=True)
+            # a success means the proxy is healthy - unbench it for
+            # the other workers sharing the bench state
+            self._stats_db.delete(f'proxy:dead:{_display(proxy)}')
         with self._lock:
             stats = self._proxies.get(proxy)
             if stats is None:
@@ -173,6 +240,10 @@ class ProxyPool:
             if stats['fails'] >= self.max_fails:
                 stats['dead_until'] = now + self.cooldown
                 stats['fails'] = 0
+                if self._stats_db is not None:
+                    self._stats_db.set(
+                        f'proxy:dead:{_display(proxy)}',
+                        time.time() + self.cooldown, ttl=self.cooldown)
                 alive = sum(
                     1 for s in self._proxies.values()
                     if s['dead_until'] <= now)
@@ -239,7 +310,8 @@ class RotatingProxySession(requests.Session):
                         f'Proxy {_display(proxy)} got HTTP '
                         f'{resp.status_code} for {url}')
                     self._pool.report_failure(proxy)
-                    resp.close()
+                    # kept open - it is returned to the caller when no
+                    # direct fallback is allowed
                     last_resp = resp
                     continue
                 self._pool.report_success(proxy, time.monotonic() - start)

@@ -39,7 +39,10 @@
 
        a) <proxy>http://host:port</proxy> - single static proxy
        b) <proxy-list> - rotating pool, applied to scraping AND metadata
-          lookups (useful to route around per-IP bans):
+          lookups (useful to route around per-IP bans). Bench state and
+          list refreshes are shared across all workers through the
+          cache DB - requires <cache> to be enabled for sharing and
+          stats (proxy_stats table):
             url           remote newline-separated proxy list, refreshed
                           every 'refresh' seconds - any http(s) URL works,
                           e.g. a raw.githubusercontent.com .txt list

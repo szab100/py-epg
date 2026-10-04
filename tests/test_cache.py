@@ -51,6 +51,18 @@ class TestTtl:
         assert exp['b'] < time.time() + 100
         c.close()
 
+    def test_delete(self, cache):
+        cache.set('k', 'v')
+        cache.delete('k')
+        assert cache.get('k') is None
+        cache.delete('k')  # missing key is a no-op
+
+    def test_explicit_ttl_overrides_category(self, cache):
+        cache.set('k', 'v', ttl=-1)
+        assert cache.get('k') is None
+        cache.set('k', 'v', 'meta', ttl=3600)
+        assert cache.get('k') == 'v'
+
     def test_delete_expired(self, tmp_path):
         c = Cache(path=str(tmp_path / 'c.sqlite'), ttls={'meta': -1})
         c.set('old', 1, 'meta')

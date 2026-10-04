@@ -93,16 +93,26 @@ class Cache:
                 return default
             return json.loads(row[0])
 
-    def set(self, key, value, category=None):
+    def set(self, key, value, category=None, ttl=None):
         if not self._enabled:
             return
-        ttl = self._ttls.get(category, self._default_ttl) \
-            if category else self._default_ttl
+        if ttl is None:
+            ttl = self._ttls.get(category, self._default_ttl) \
+                if category else self._default_ttl
         with self._lock:
             self._connect().execute(
                 'INSERT OR REPLACE INTO cache (key, value, expires) '
                 'VALUES (?, ?, ?)',
                 (key, json.dumps(value), time.time() + ttl))
+            self._conn.commit()
+
+    def delete(self, key):
+        """Removes a key. No-op when disabled or the key is missing."""
+        if not self._enabled:
+            return
+        with self._lock:
+            self._connect().execute(
+                'DELETE FROM cache WHERE key = ?', (key,))
             self._conn.commit()
 
     def ttl(self, category):

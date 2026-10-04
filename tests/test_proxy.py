@@ -170,6 +170,99 @@ class TestRotatingProxySession:
             s.request('GET', 'http://x')
 
 
+class TestSharedBenchState:
+    """Bench markers are shared through the stats DB so workers (each
+    holding their own pickled pool copy) don't re-discover the same
+    dead proxies."""
+
+    def test_bench_shared_across_pool_copies(self, cache):
+        a = ProxyPool(proxies=['1.1.1.1:1'], max_fails=1, stats_db=cache)
+        b = ProxyPool(proxies=['1.1.1.1:1'], max_fails=1, stats_db=cache)
+        bad = a.acquire()
+        a.report_failure(bad)
+        assert b.acquire() is None
+
+    def test_success_unbenches_for_everyone(self, cache):
+        a = ProxyPool(proxies=['1.1.1.1:1'], max_fails=1, stats_db=cache)
+        b = ProxyPool(proxies=['1.1.1.1:1'], max_fails=1, stats_db=cache)
+        bad = a.acquire()
+        a.report_failure(bad)
+        assert b.acquire() is None
+        b.report_success(bad)
+        assert b.acquire() == 'http://1.1.1.1:1'
+
+    def test_shared_marker_expires_with_cooldown(self, cache):
+        pool = ProxyPool(proxies=['1.1.1.1:1'], max_fails=1,
+                         cooldown=-1, stats_db=cache)
+        bad = pool.acquire()
+        pool.report_failure(bad)
+        assert pool.acquire() == bad
+
+    def test_unshared_pools_behave_as_before(self):
+        a = ProxyPool(proxies=['1.1.1.1:1'], max_fails=1)
+        b = ProxyPool(proxies=['1.1.1.1:1'], max_fails=1)
+        bad = a.acquire()
+        a.report_failure(bad)
+        assert b.acquire() == 'http://1.1.1.1:1'  # B doesn't see it
+
+
+class TestSharedRefreshState:
+    """The list-download timestamp/list is shared so one refresh per
+    interval happens globally, not once per pickled pool copy."""
+
+    def _resp(self, text):
+        r = MagicMock()
+        r.text = text
+        r.raise_for_status.return_value = None
+        return r
+
+    def test_second_pool_copy_adopts_list_without_refetch(self, cache):
+        with patch('py_epg.common.proxy.requests.get',
+                   return_value=self._resp('1.1.1.1:1\n2.2.2.2:2')) as g:
+            a = ProxyPool(url='http://list', refresh=300, stats_db=cache)
+            a.acquire()
+            # fresh copy = what a worker task sees after pickling
+            b = ProxyPool(url='http://list', refresh=300, stats_db=cache)
+            assert b.acquire() in ('http://1.1.1.1:1', 'http://2.2.2.2:2')
+            assert g.call_count == 1
+
+    def test_failed_refresh_marks_attempt(self, cache):
+        with patch('py_epg.common.proxy.requests.get',
+                   side_effect=requests.RequestException('429')) as g:
+            a = ProxyPool(url='http://list', refresh=300, stats_db=cache)
+            a.acquire()
+            b = ProxyPool(url='http://list', refresh=300, stats_db=cache)
+            b.acquire()
+            assert g.call_count == 1
+
+    def test_stale_list_proxies_removed(self, cache):
+        with patch('py_epg.common.proxy.requests.get') as g:
+            g.side_effect = [self._resp('1.1.1.1:1'),
+                             self._resp('9.9.9.9:9')]
+            pool = ProxyPool(url='http://list', refresh=-1,
+                             stats_db=cache)
+            pool.acquire()
+            pool.acquire()
+            assert list(pool._proxies) == ['http://9.9.9.9:9']
+
+    def test_static_proxies_survive_refresh(self, cache):
+        with patch('py_epg.common.proxy.requests.get',
+                   return_value=self._resp('9.9.9.9:9')):
+            pool = ProxyPool(url='http://list', proxies=['5.5.5.5:5'],
+                             stats_db=cache)
+            pool.acquire()
+            assert set(pool._proxies) == {'http://5.5.5.5:5',
+                                          'http://9.9.9.9:9'}
+
+    def test_no_stats_db_falls_back_to_local_timing(self):
+        with patch('py_epg.common.proxy.requests.get',
+                   return_value=self._resp('1.1.1.1:1')) as g:
+            a = ProxyPool(url='http://list', refresh=300)
+            a.acquire()
+            a.acquire()
+            assert g.call_count == 1  # local _last_refresh still gates
+
+
 def pickle_roundtrip(obj):
     import pickle
     return pickle.loads(pickle.dumps(obj))
