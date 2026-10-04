@@ -216,6 +216,7 @@ class PyEPG:
                 'channel': int(cfg.attrib.get('channel-ttl', 604800)),
                 'program': int(cfg.attrib.get('program-ttl', 2592000)),
                 'meta': int(cfg.attrib.get('meta-ttl', 7776000)),
+                'listing': int(cfg.attrib.get('listing-ttl', 21600)),
             })
 
     def _build_metadata(self):

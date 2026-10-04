@@ -62,11 +62,36 @@ class TvMustraHu(EpgScraper):
             icon=Icon(src=channel_logo_src) if channel_logo_src else None)
 
     def fetch_programs(self, channel: Channel, channel_site_id: str, fetch_date: date) -> List[Programme]:
+        cache_key = (f'listing:{self._site_id}:{channel_site_id}:'
+                     f'{fetch_date.strftime("%Y-%m-%d")}')
+        entries = self._cache.get(cache_key)
+        if entries is None:
+            entries = self._fetch_listing(channel_site_id, fetch_date)
+            self._cache.set(cache_key, entries, 'listing')
+        programs = []
+        missing_details = 0
+        for e in entries:
+            program = Programme(
+                channel=channel.id,
+                start=e['start'],
+                title=[Title(content=[e['title']], lang='hu')])
+            details = self._get_program_details(e['table'], e['id'])
+            if not details:
+                missing_details += 1
+            self._apply_program_details(program, details, e['title'])
+            programs.append(program)
+        if missing_details:
+            self._log.info(
+                f'{channel_site_id}: no detail data on the site for '
+                f'{missing_details}/{len(programs)} programs on {fetch_date}')
+        return programs
+
+    def _fetch_listing(self, channel_site_id: str, fetch_date: date) -> list:
+        """Returns [{table, id, title, start}] for a broadcast day."""
         url = (f'{self._base_url}/tvmusor/{channel_site_id}/'
                f'{fetch_date.strftime("%Y-%m-%d")}')
         soup = self._get_soup(url)
-        programs = []
-        missing_details = 0
+        entries = []
         # The daily page covers a broadcast day (early-morning programs roll
         # past midnight), so track the rollover and keep them all.
         last_time = None
@@ -86,22 +111,11 @@ class TvMustraHu(EpgScraper):
             start_dt = datetime.combine(
                 fetch_date + timedelta(days=day_offset),
                 time(hour, minute, tzinfo=self._tz_local))
-            program = Programme(
-                channel=channel.id,
-                start=start_dt.strftime('%Y%m%d%H%M%S %z'),
-                title=[Title(content=[title_elem.get_text(strip=True)],
-                             lang='hu')])
-            details = self._get_program_details(table, prog_id)
-            if not details:
-                missing_details += 1
-            self._apply_program_details(
-                program, details, title_elem.get_text(strip=True))
-            programs.append(program)
-        if missing_details:
-            self._log.info(
-                f'{channel_site_id}: no detail data on the site for '
-                f'{missing_details}/{len(programs)} programs on {fetch_date}')
-        return programs
+            entries.append({
+                'table': table, 'id': prog_id,
+                'title': title_elem.get_text(strip=True),
+                'start': start_dt.strftime('%Y%m%d%H%M%S %z')})
+        return entries
 
     def _get_program_details(self, table: str, prog_id: str) -> dict:
         cache_key = f'program:{self._site_id}:{table}:{prog_id}'
