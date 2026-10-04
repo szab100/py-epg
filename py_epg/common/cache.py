@@ -106,6 +106,31 @@ class Cache:
                 (key, json.dumps(value), time.time() + ttl))
             self._conn.commit()
 
+    def increment(self, key, ttl=None) -> int:
+        """
+        Atomically increments an integer counter (a single upsert, so
+        concurrent workers can't lose updates). An expired row restarts
+        at 1. Returns the new value.
+        """
+        if not self._enabled:
+            return 0
+        now = time.time()
+        expires = now + (ttl if ttl is not None else self._default_ttl)
+        with self._lock:
+            conn = self._connect()
+            conn.execute(
+                '''INSERT INTO cache (key, value, expires)
+                       VALUES (?, '1', ?)
+                   ON CONFLICT(key) DO UPDATE SET
+                       value = CASE WHEN expires < ? THEN 1
+                               ELSE CAST(value AS INTEGER) + 1 END,
+                       expires = ?''',
+                (key, expires, now, expires))
+            row = conn.execute(
+                'SELECT value FROM cache WHERE key = ?', (key,)).fetchone()
+            conn.commit()
+        return int(row[0]) if row else 0
+
     def delete(self, key):
         """Removes a key. No-op when disabled or the key is missing."""
         if not self._enabled:

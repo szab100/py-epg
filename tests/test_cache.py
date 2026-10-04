@@ -105,3 +105,17 @@ class TestProxyStats:
                             lambda: (_ for _ in ()).throw(sqlite3.Error()))
         c.record_proxy_result('h:p', ok=True)  # must not raise
         c.close()
+
+
+class TestIncrement:
+    def test_counts_up(self, cache):
+        assert cache.increment('n', ttl=60) == 1
+        assert cache.increment('n', ttl=60) == 2
+        assert cache.increment('n', ttl=60) == 3
+
+    def test_expired_counter_restarts(self, cache):
+        cache.increment('n', ttl=-1)
+        assert cache.increment('n', ttl=60) == 1
+
+    def test_disabled_returns_zero(self):
+        assert Cache(enabled=False).increment('n') == 0

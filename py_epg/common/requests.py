@@ -1,9 +1,32 @@
 #!/usr/bin/env python3
 """Module defines request related configurations."""
+import time
+
 from urllib3 import util
 
 import requests
 from requests import adapters
+
+
+class ThrottledSession(requests.Session):
+    """Session enforcing a minimum delay between requests (per process,
+    like the scraper throttle). Used for metadata lookup sessions."""
+
+    def __init__(self, request_delay=0.0):
+        super().__init__()
+        self._request_delay = request_delay
+        self._last_request = 0.0
+        self.__attrs__ = list(self.__attrs__) + [
+            '_request_delay', '_last_request']
+
+    def request(self, method, url, **kwargs):
+        if self._request_delay > 0:
+            wait = self._request_delay - \
+                (time.monotonic() - self._last_request)
+            if wait > 0:
+                time.sleep(wait)
+            self._last_request = time.monotonic()
+        return super().request(method, url, **kwargs)
 
 
 def get_http_session(
@@ -14,6 +37,7 @@ def get_http_session(
         proxy=None,
         user_agent=None,
         retry_after_max=180,
+        request_delay=0.0,
 ) -> requests.Session:
     """
     Build request retry policy.
@@ -21,7 +45,9 @@ def get_http_session(
     retry_after_max caps server-sent Retry-After waits (urllib3's default
     is 6 hours, which would stall a worker for hours on a rate-limit ban).
     """
-    session = session or requests.Session()
+    if session is None:
+        session = ThrottledSession(request_delay) if request_delay \
+            else requests.Session()
     retry = util.Retry(
         total=retries,
         read=retries,

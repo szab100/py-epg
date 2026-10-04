@@ -169,6 +169,33 @@ class TestRotatingProxySession:
         with pytest.raises(requests.exceptions.ConnectionError):
             s.request('GET', 'http://x')
 
+    def test_read_timeout_tries_next(self):
+        """A stalling proxy (connected, never responds) must retry
+        through the next proxy - it is not a target-site error."""
+        s = self._session(proxies=['1.1.1.1:1', '2.2.2.2:2'],
+                          max_fails=1)
+        ok = MagicMock(status_code=200)
+        with patch.object(requests.Session, 'request',
+                          side_effect=[requests.exceptions.ReadTimeout(),
+                                       ok]) as sup:
+            assert s.request('GET', 'http://x') is ok
+            assert sup.call_count == 2
+
+    def test_request_delay_throttles(self):
+        """request_delay sleeps between requests, like the scraper
+        throttle - used for metadata lookup sessions."""
+        pool = ProxyPool(proxies=['1.1.1.1:1'])
+        s = RotatingProxySession(pool, request_delay=10.0)
+        ok = MagicMock(status_code=200)
+        with patch.object(requests.Session, 'request', return_value=ok), \
+                patch('py_epg.common.proxy.time.sleep') as sleep:
+            s.request('GET', 'http://x')
+            s.request('GET', 'http://y')
+            assert s.request('GET', 'http://z') is ok
+        # first request is immediate, the next two wait ~10s
+        assert sleep.call_count == 2
+        assert sleep.call_args.args[0] > 9.0
+
 
 class TestSharedBenchState:
     """Bench markers are shared through the stats DB so workers (each
@@ -204,6 +231,54 @@ class TestSharedBenchState:
         bad = a.acquire()
         a.report_failure(bad)
         assert b.acquire() == 'http://1.1.1.1:1'  # B doesn't see it
+
+
+class TestSharedFailStreak:
+    """The consecutive-fail counter is shared through the stats DB - each
+    task gets a pickled pool copy with a fresh local counter, so without
+    sharing a proxy failing <max_fails per task would never bench."""
+
+    def test_streak_shared_across_pool_copies(self, cache):
+        a = ProxyPool(proxies=['1.1.1.1:1', '2.2.2.2:2'], max_fails=3,
+                      stats_db=cache)
+        bad = 'http://1.1.1.1:1'
+        # two separate copies each see < max_fails failures
+        a.report_failure(bad)
+        b = ProxyPool(proxies=['1.1.1.1:1', '2.2.2.2:2'], max_fails=3,
+                      stats_db=cache)
+        b.report_failure(bad)
+        c = ProxyPool(proxies=['1.1.1.1:1', '2.2.2.2:2'], max_fails=3,
+                      stats_db=cache)
+        c.report_failure(bad)  # shared streak hits 3 -> benched
+        d = ProxyPool(proxies=['1.1.1.1:1', '2.2.2.2:2'], max_fails=3,
+                      stats_db=cache)
+        assert d.acquire() == 'http://2.2.2.2:2'
+        assert d.acquire() == 'http://2.2.2.2:2'
+
+    def test_success_resets_shared_streak(self, cache):
+        pool = ProxyPool(proxies=['1.1.1.1:1', '2.2.2.2:2'], max_fails=2,
+                         stats_db=cache)
+        bad = 'http://1.1.1.1:1'
+        pool.report_failure(bad)
+        pool.report_success(bad)
+        pool.report_failure(bad)  # streak is 1 again, not 3
+        other = ProxyPool(proxies=['1.1.1.1:1', '2.2.2.2:2'], max_fails=2,
+                          stats_db=cache)
+        got = {other.acquire() for _ in range(4)}
+        assert len(got) == 2  # still in rotation
+
+    def test_streak_expires_with_cooldown_ttl(self, cache):
+        pool = ProxyPool(proxies=['1.1.1.1:1', '2.2.2.2:2'], max_fails=2,
+                         cooldown=-1, stats_db=cache)
+        bad = 'http://1.1.1.1:1'
+        pool.report_failure(bad)      # streak 1, but instantly expired
+        other = ProxyPool(proxies=['1.1.1.1:1', '2.2.2.2:2'], max_fails=2,
+                          cooldown=-1, stats_db=cache)
+        other.report_failure(bad)     # stale streak restarted -> 1, not 2
+        third = ProxyPool(proxies=['1.1.1.1:1', '2.2.2.2:2'], max_fails=2,
+                        stats_db=cache)
+        got = {third.acquire() for _ in range(4)}
+        assert len(got) == 2
 
 
 class TestSharedRefreshState:

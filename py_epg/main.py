@@ -406,24 +406,33 @@ class PyEPG:
         # A configured proxy pool also spreads lookups across egress IPs -
         # bans are per-IP, so rotation is the only safe way to raise the
         # request rate.
+        # lookups obey the same <request-delay> as the scrapers - the
+        # session itself throttles, so every provider request is covered
+        request_delay = self._request_delay()
         if isinstance(self._proxy, ProxyPool):
-            session = get_proxy_session(pool=self._proxy, user_agent=ua)
+            session = get_proxy_session(
+                pool=self._proxy, user_agent=ua,
+                request_delay=request_delay)
         else:
             # Fast-fail retry policy: unlike scraping (which retries
             # through rate-limit bans), a throttled lookup should error
             # out quickly. Failures are best-effort and never cached.
             session = get_http_session(
                 proxy=self._proxy, user_agent=ua,
-                retries=1, backoff_factor=0.5, retry_after_max=10)
+                retries=1, backoff_factor=0.5, retry_after_max=10,
+                request_delay=request_delay)
         return build_metadata(cfg, session=session, cache=self._cache)
+
+    def _request_delay(self) -> float:
+        delay_cfg = self._config.find('request-delay')
+        return float(delay_cfg.text) \
+            if delay_cfg is not None and delay_cfg.text else 0.0
 
     def _init_epg_scrapers(self) -> Dict[str, EpgScraper]:
         result = {}
         implementations = EpgScraper.__subclasses__()
         user_agent = self._config.find('user-agent')
-        delay_cfg = self._config.find('request-delay')
-        request_delay = float(delay_cfg.text) \
-            if delay_cfg is not None and delay_cfg.text else None
+        request_delay = self._request_delay()
         for scraper_class in implementations:
             obj = scraper_class(proxy=self._proxy,
                                 user_agent=user_agent.text if user_agent is not None else None,

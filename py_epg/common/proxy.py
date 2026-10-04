@@ -18,7 +18,7 @@ KNOWN_SCHEMES = ('http', 'https', 'socks4', 'socks4a', 'socks5', 'socks5h')
 # Errors considered the proxy's fault (as opposed to the target site's).
 PROXY_FAILURES = (
     requests.exceptions.ProxyError,
-    requests.exceptions.ConnectTimeout,
+    requests.exceptions.Timeout,  # covers ConnectTimeout + ReadTimeout
     requests.exceptions.SSLError,
     requests.exceptions.ConnectionError,
 )
@@ -213,10 +213,13 @@ class ProxyPool:
 
     def report_success(self, proxy, rtt=None):
         if self._stats_db is not None:
-            self._stats_db.record_proxy_result(_display(proxy), ok=True)
-            # a success means the proxy is healthy - unbench it for
-            # the other workers sharing the bench state
-            self._stats_db.delete(f'proxy:dead:{_display(proxy)}')
+            hp = _display(proxy)
+            self._stats_db.record_proxy_result(hp, ok=True)
+            # a success means the proxy is healthy - unbench it and
+            # reset its consecutive-fail streak for the other workers
+            # sharing pool state
+            self._stats_db.delete(f'proxy:dead:{hp}')
+            self._stats_db.delete(f'proxy:fails:{hp}')
         with self._lock:
             stats = self._proxies.get(proxy)
             if stats is None:
@@ -229,26 +232,34 @@ class ProxyPool:
                     stats['rtt'] * 0.8 + rtt * 0.2
 
     def report_failure(self, proxy):
+        hp = _display(proxy)
+        shared_bench = False
         if self._stats_db is not None:
-            self._stats_db.record_proxy_result(_display(proxy), ok=False)
+            self._stats_db.record_proxy_result(hp, ok=False)
+            # the consecutive-fail streak is shared too: each task gets
+            # a pickled pool copy with a fresh counter, so without this
+            # a proxy failing <max_fails per task would never bench
+            shared_bench = self._stats_db.increment(
+                f'proxy:fails:{hp}', ttl=self.cooldown) >= self.max_fails
         now = time.monotonic()
         with self._lock:
             stats = self._proxies.get(proxy)
             if stats is None:
                 return
             stats['fails'] += 1
-            if stats['fails'] >= self.max_fails:
+            if stats['fails'] >= self.max_fails or shared_bench:
                 stats['dead_until'] = now + self.cooldown
                 stats['fails'] = 0
                 if self._stats_db is not None:
                     self._stats_db.set(
-                        f'proxy:dead:{_display(proxy)}',
+                        f'proxy:dead:{hp}',
                         time.time() + self.cooldown, ttl=self.cooldown)
+                    self._stats_db.delete(f'proxy:fails:{hp}')
                 alive = sum(
                     1 for s in self._proxies.values()
                     if s['dead_until'] <= now)
                 log.info(
-                    f'Proxy {_display(proxy)} benched for {self.cooldown}s '
+                    f'Proxy {hp} benched for {self.cooldown}s '
                     f'({alive}/{len(self._proxies)} alive)')
 
     def stats(self):
@@ -272,10 +283,14 @@ class RotatingProxySession(requests.Session):
 
     def __init__(self, pool: ProxyPool,
                  status_forcelist=(403, 429, 500, 502, 503, 504),
-                 user_agent=None):
+                 user_agent=None, request_delay=0.0):
         super().__init__()
         self._pool = pool
         self._status_forcelist = set(status_forcelist)
+        # optional minimum seconds between requests (per process, like
+        # the scraper throttle) - set for metadata lookup sessions
+        self._request_delay = request_delay
+        self._last_request = 0.0
         # All retries are handled at the pool level: a failing or
         # rate-limited proxy is swapped for the next one, which is far
         # better than sleeping and retrying through the same (banned) IP.
@@ -289,9 +304,16 @@ class RotatingProxySession(requests.Session):
         # __attrs__ - add ours so the session survives being pickled into
         # multiprocessing workers.
         self.__attrs__ = list(self.__attrs__) + [
-            '_pool', '_status_forcelist']
+            '_pool', '_status_forcelist',
+            '_request_delay', '_last_request']
 
     def request(self, method, url, **kwargs):
+        if self._request_delay > 0:
+            wait = self._request_delay - \
+                (time.monotonic() - self._last_request)
+            if wait > 0:
+                time.sleep(wait)
+            self._last_request = time.monotonic()
         kwargs.setdefault('timeout', self._pool.timeout)
         last_error = None
         last_resp = None
@@ -337,5 +359,7 @@ class RotatingProxySession(requests.Session):
 
 
 def get_proxy_session(pool: ProxyPool,
-                      user_agent=None) -> RotatingProxySession:
-    return RotatingProxySession(pool, user_agent=user_agent)
+                      user_agent=None,
+                      request_delay=0.0) -> RotatingProxySession:
+    return RotatingProxySession(pool, user_agent=user_agent,
+                                request_delay=request_delay)
