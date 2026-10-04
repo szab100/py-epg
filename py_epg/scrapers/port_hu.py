@@ -131,8 +131,12 @@ class PortHu(EpgScraper):
                 'age_limit': (e.get('restriction') or {}).get('age_limit'),
                 'category': (e.get('restriction') or {}).get('category'),
                 'film_url': e.get('film_url'),
-                'content_id': e.get('film_id')
-                or (e.get('film_url') or '').rsplit('/', 1)[-1]
+                # film_url's last segment is the content-level id
+                # (movie-N / episode-N); film_id is the *series*-level
+                # page id for episodes - keying details on it would
+                # share one episode's data across the whole series
+                'content_id': (e.get('film_url') or '').rsplit('/', 1)[-1]
+                or e.get('film_id')
                 or None,
             } for e in events if e.get('title') and e.get('start_datetime')]
             self._cache.set(cache_key, entries, 'listing')

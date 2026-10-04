@@ -215,6 +215,25 @@ class TestFetchPrograms:
         s.fetch_programs(channel, 'tvchannel-1', date(2024, 1, 15))
         assert s._get_json.call_count == 1
 
+    def test_episodes_of_same_series_get_distinct_detail_keys(self):
+        """film_id is the series-level page id; episodes must key their
+        details on the episode-level id from film_url - otherwise all
+        episodes share one episode's details."""
+        s = make_scraper()
+        s._get_json = MagicMock(return_value={'channels': [{'programs': [
+            {'id': 'e1', 'start_datetime': '2024-01-15T06:00:00+01:00',
+             'title': 'Show', 'film_id': 'movie-1',
+             'film_url': '/adatlap/x/event-tv-1/episode-100'},
+            {'id': 'e2', 'start_datetime': '2024-01-15T07:00:00+01:00',
+             'title': 'Show', 'film_id': 'movie-1',
+             'film_url': '/adatlap/x/event-tv-2/episode-200'},
+        ]}]})
+        s._get_program_details = MagicMock(return_value={})
+        s.fetch_programs(MagicMock(id='CH'), 'c', date(2024, 1, 15))
+        calls = {c.args[0] for c in
+                 s._get_program_details.call_args_list}
+        assert calls == {'episode-100', 'episode-200'}
+
     def test_events_missing_title_or_start_skipped(self):
         s = make_scraper()
         s._get_json = MagicMock(return_value={'channels': [{'programs': [
