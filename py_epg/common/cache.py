@@ -29,9 +29,15 @@ CREATE TABLE IF NOT EXISTS proxy_stats (
     last_fail    REAL,
     last_success REAL,
     first_seen   REAL NOT NULL,
-    last_seen    REAL NOT NULL
+    last_seen    REAL NOT NULL,
+    dead_until   REAL
 )
 '''
+
+# columns added after the initial schema - migrated via ALTER TABLE
+_MIGRATIONS = (
+    ('proxy_stats', 'dead_until', 'REAL'),
+)
 
 
 class Cache:
@@ -64,6 +70,13 @@ class Cache:
             # locks instead of erroring.
             self._conn.execute('PRAGMA busy_timeout=10000')
             self._conn.executescript(_SCHEMA)
+            for table, column, decl in _MIGRATIONS:
+                cols = {r[1] for r in self._conn.execute(
+                    f'PRAGMA table_info({table})')}
+                if column not in cols:
+                    self._conn.execute(
+                        f'ALTER TABLE {table} '
+                        f'ADD COLUMN {column} {decl}')
             self._conn.commit()
         return self._conn
 
@@ -181,6 +194,31 @@ class Cache:
                 self._conn.commit()
         except sqlite3.Error as e:
             log.debug(f'Failed to record proxy stat for {proxy}: {e}')
+
+    def record_proxy_dead(self, proxy: str, dead_until=None):
+        """
+        Mirrors the current bench deadline (or clears it with None) on
+        the proxy_stats row so bench state is visible when querying the
+        table. The authoritative marker lives under 'proxy:dead:*' cache
+        keys - this is a reporting copy. Best-effort.
+        """
+        if not self._enabled:
+            return
+        now = time.time()
+        try:
+            with self._lock:
+                self._connect().execute(
+                    '''INSERT INTO proxy_stats
+                           (proxy, fails, successes, first_seen,
+                            last_seen, dead_until)
+                       VALUES (?, 0, 0, ?, ?, ?)
+                       ON CONFLICT(proxy) DO UPDATE SET
+                           dead_until = excluded.dead_until,
+                           last_seen = excluded.last_seen''',
+                    (proxy, now, now, dead_until))
+                self._conn.commit()
+        except sqlite3.Error as e:
+            log.debug(f'Failed to record proxy bench for {proxy}: {e}')
 
     def close(self):
         with self._lock:

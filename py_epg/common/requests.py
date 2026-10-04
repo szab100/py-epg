@@ -19,6 +19,13 @@ class ThrottledSession(requests.Session):
         self.__attrs__ = list(self.__attrs__) + [
             '_request_delay', '_last_request']
 
+    def __setstate__(self, state):
+        super().__setstate__(state)
+        # a pickled task copy can't inherit live throttle state - mark
+        # the budget as just used so a wave of new tasks can't burst
+        if self._request_delay > 0:
+            self._last_request = time.monotonic()
+
     def request(self, method, url, **kwargs):
         if self._request_delay > 0:
             wait = self._request_delay - \

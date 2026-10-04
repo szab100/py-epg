@@ -42,6 +42,13 @@ class EpgScraper(ABC):
                 user_agent=self._user_agent, proxy=proxy)
             self._timeout = 60
 
+    def __setstate__(self, state):
+        self.__dict__.update(state)
+        # a pickled task copy can't inherit live throttle state - mark
+        # the budget as just used so a wave of new tasks can't burst
+        if self._request_delay > 0:
+            self._last_request = time.monotonic()
+
     def _throttle(self):
         """Sleeps until request_delay has elapsed since the last request."""
         if self._request_delay <= 0:

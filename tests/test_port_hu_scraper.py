@@ -3,6 +3,7 @@
 detail extraction and programme assembly."""
 
 import json
+import pickle
 from datetime import date
 from unittest.mock import MagicMock
 
@@ -22,6 +23,21 @@ def make_scraper(cache=None, metadata=None):
 def make_programme():
     return Programme(channel='CH', start='20240115060000 +0100',
                      title=[Title(content=['Cím'], lang='hu')])
+
+
+class TestThrottlePickle:
+    def test_pickled_task_copy_starts_cold(self):
+        """A task copy can't inherit live throttle state - its first
+        request must wait request_delay so task waves can't burst."""
+        s = PortHu(user_agent='test', request_delay=5.0)
+        assert s._last_request == 0.0
+        clone = pickle.loads(pickle.dumps(s))
+        assert clone._last_request > 0.0
+
+    def test_zero_delay_copy_stays_hot(self):
+        s = PortHu(user_agent='test', request_delay=0)
+        clone = pickle.loads(pickle.dumps(s))
+        assert clone._last_request == 0.0
 
 
 class TestSeasonEpisode:

@@ -281,6 +281,37 @@ class TestSharedFailStreak:
         assert len(got) == 2
 
 
+class TestSharedRotation:
+    """The round-robin offset is shared so pickled task copies don't all
+    start at index 0 and hammer the same first proxy."""
+
+    def test_copies_get_distinct_proxies(self, cache):
+        mk = lambda: ProxyPool(
+            proxies=['1.1.1.1:1', '2.2.2.2:2', '3.3.3.3:3'],
+            stats_db=cache)
+        got = {mk().acquire(), mk().acquire(), mk().acquire()}
+        assert len(got) == 3
+
+    def test_per_proxy_delay_skips_recently_used(self, cache):
+        kw = dict(per_proxy_delay=600, stats_db=cache)
+        a = ProxyPool(proxies=['1.1.1.1:1', '2.2.2.2:2'], **kw)
+        first = a.acquire()
+        b = ProxyPool(proxies=['1.1.1.1:1', '2.2.2.2:2'], **kw)
+        assert b.acquire() != first
+
+    def test_per_proxy_delay_zero_unchanged(self, cache):
+        kw = dict(per_proxy_delay=0.0, stats_db=cache)
+        ProxyPool(proxies=['1.1.1.1:1', '2.2.2.2:2'], **kw).acquire()
+        b = ProxyPool(proxies=['1.1.1.1:1', '2.2.2.2:2'], **kw)
+        assert b.acquire() in ('http://1.1.1.1:1', 'http://2.2.2.2:2')
+
+    def test_pickled_copy_gets_random_offset(self):
+        pool = ProxyPool(proxies=['1.1.1.1:1', '2.2.2.2:2', '3.3.3.3:3'])
+        # many copies - the first-acquire should not be deterministic
+        starts = {pickle_roundtrip(pool)._rr_index for _ in range(20)}
+        assert len(starts) > 1
+
+
 class TestSharedRefreshState:
     """The list-download timestamp/list is shared so one refresh per
     interval happens globally, not once per pickled pool copy."""

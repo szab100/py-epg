@@ -54,6 +54,10 @@
             tries         proxies attempted per request (default 3)
             allow-direct  fall back to direct if all proxies fail
                           (default true)
+            per-proxy-delay  minimum seconds between uses of the same
+                          proxy IP across ALL workers (default 0 = off);
+                          rotation already spreads requests evenly, this
+                          adds a hard per-IP floor for strict rate limits
        Accepted entry formats: host:port (assumed http),
        host:port:user:pass or user:pass@host:port for authenticated
        proxies, scheme://host:port (http,https,socks4,socks4a,socks5,

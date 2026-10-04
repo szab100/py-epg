@@ -2,6 +2,7 @@
 """Rotating proxy pool with circuit breaker + per-request proxy session."""
 
 import logging
+import random
 import threading
 import time
 from collections import OrderedDict
@@ -86,7 +87,7 @@ class ProxyPool:
 
     def __init__(self, url=None, proxies=(), refresh=300, max_fails=3,
                  cooldown=600, timeout=10, tries=3, allow_direct=True,
-                 stats_db=None):
+                 stats_db=None, per_proxy_delay=0.0):
         self.url = url
         self.refresh = refresh
         self.max_fails = max_fails
@@ -94,6 +95,9 @@ class ProxyPool:
         self.timeout = timeout
         self.tries = tries
         self.allow_direct = allow_direct
+        # optional minimum seconds between uses of the same proxy IP -
+        # shared across all workers via the stats DB
+        self._per_proxy_delay = per_proxy_delay
         # Optional Cache instance for persistent per-proxy stats (the
         # proxy_stats table - cumulative across runs and processes).
         self._stats_db = stats_db
@@ -120,6 +124,11 @@ class ProxyPool:
     def __setstate__(self, state):
         self.__dict__.update(state)
         self._lock = threading.Lock()
+        # the parent's pool never acquires, so every pickled task copy
+        # would start round-robin at index 0 and funnel first requests
+        # into the same proxy - randomize the offset instead
+        if self._proxies:
+            self._rr_index = random.randrange(len(self._proxies))
 
     def _shared_state(self) -> dict:
         """Last list-download attempt/list shared via the stats DB -
@@ -196,6 +205,23 @@ class ProxyPool:
                 return False
         return True
 
+    def _start_index(self, n) -> int:
+        """Rotation offset: a shared counter keeps acquires evenly
+        spread across ALL pool copies, not just within one task."""
+        if self._stats_db is not None:
+            idx = self._stats_db.increment('proxy:rr', ttl=86400)
+            if idx:
+                return idx % n
+        return self._rr_index
+
+    def _recently_used(self, key) -> bool:
+        """Per-egress-IP pacing: True when the proxy was used less than
+        per_proxy_delay ago by any worker sharing the stats DB."""
+        if self._per_proxy_delay <= 0 or self._stats_db is None:
+            return False
+        last = self._stats_db.get(f'proxy:ts:{_display(key)}')
+        return bool(last) and time.time() - last < self._per_proxy_delay
+
     def acquire(self) -> str:
         """Returns the next healthy proxy URL, or None if the pool is empty."""
         now = time.monotonic()
@@ -204,10 +230,18 @@ class ProxyPool:
             if not self._proxies:
                 return None
             keys = list(self._proxies.keys())
+            start = self._start_index(len(keys))
             for i in range(len(keys)):
-                idx = (self._rr_index + i) % len(keys)
-                if self._alive(keys[idx], now):
+                idx = (start + i) % len(keys)
+                if self._alive(keys[idx], now) and \
+                        not self._recently_used(keys[idx]):
                     self._rr_index = (idx + 1) % len(keys)
+                    if self._per_proxy_delay > 0 and \
+                            self._stats_db is not None:
+                        self._stats_db.set(
+                            f'proxy:ts:{_display(keys[idx])}',
+                            time.time(),
+                            ttl=max(self._per_proxy_delay, 60))
                     return keys[idx]
             return None
 
@@ -220,6 +254,7 @@ class ProxyPool:
             # sharing pool state
             self._stats_db.delete(f'proxy:dead:{hp}')
             self._stats_db.delete(f'proxy:fails:{hp}')
+            self._stats_db.record_proxy_dead(hp)
         with self._lock:
             stats = self._proxies.get(proxy)
             if stats is None:
@@ -251,10 +286,11 @@ class ProxyPool:
                 stats['dead_until'] = now + self.cooldown
                 stats['fails'] = 0
                 if self._stats_db is not None:
+                    dead_until = time.time() + self.cooldown
                     self._stats_db.set(
-                        f'proxy:dead:{hp}',
-                        time.time() + self.cooldown, ttl=self.cooldown)
+                        f'proxy:dead:{hp}', dead_until, ttl=self.cooldown)
                     self._stats_db.delete(f'proxy:fails:{hp}')
+                    self._stats_db.record_proxy_dead(hp, dead_until)
                 alive = sum(
                     1 for s in self._proxies.values()
                     if s['dead_until'] <= now)
@@ -306,6 +342,13 @@ class RotatingProxySession(requests.Session):
         self.__attrs__ = list(self.__attrs__) + [
             '_pool', '_status_forcelist',
             '_request_delay', '_last_request']
+
+    def __setstate__(self, state):
+        super().__setstate__(state)
+        # a pickled task copy can't inherit live throttle state - mark
+        # the budget as just used so a wave of new tasks can't burst
+        if self._request_delay > 0:
+            self._last_request = time.monotonic()
 
     def request(self, method, url, **kwargs):
         if self._request_delay > 0:

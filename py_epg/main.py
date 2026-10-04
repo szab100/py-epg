@@ -371,7 +371,9 @@ class PyEPG:
                 tries=int(pool_cfg.attrib.get('tries', 3)),
                 allow_direct=argparse_str2bool(
                     pool_cfg.attrib.get('allow-direct', 'true')),
-                stats_db=self._cache)
+                stats_db=self._cache,
+                per_proxy_delay=float(
+                    pool_cfg.attrib.get('per-proxy-delay', 0) or 0))
             self._log.info(
                 f'Proxy pool configured (url={pool.url}, '
                 f'{len(pool._proxies)} static proxies)')

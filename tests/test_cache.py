@@ -107,6 +107,42 @@ class TestProxyStats:
         c.close()
 
 
+class TestProxyDead:
+    def test_dead_until_mirrored_and_cleared(self, cache):
+        cache.record_proxy_dead('1.2.3.4:8080', 99999.0)
+        row = cache._connect().execute(
+            'SELECT dead_until FROM proxy_stats WHERE proxy = ?',
+            ('1.2.3.4:8080',)).fetchone()
+        assert row == (99999.0,)
+        cache.record_proxy_dead('1.2.3.4:8080')
+        row = cache._connect().execute(
+            'SELECT dead_until FROM proxy_stats WHERE proxy = ?',
+            ('1.2.3.4:8080',)).fetchone()
+        assert row == (None,)
+
+    def test_migration_adds_dead_until_to_old_db(self, tmp_path):
+        # create a DB with the pre-dead_until proxy_stats schema
+        path = str(tmp_path / 'old.sqlite')
+        conn = sqlite3.connect(path)
+        conn.execute('''CREATE TABLE proxy_stats (
+            proxy TEXT PRIMARY KEY, fails INTEGER NOT NULL DEFAULT 0,
+            successes INTEGER NOT NULL DEFAULT 0, last_fail REAL,
+            last_success REAL, first_seen REAL NOT NULL,
+            last_seen REAL NOT NULL)''')
+        conn.execute('INSERT INTO proxy_stats '
+                     '(proxy, fails, successes, first_seen, last_seen) '
+                     "VALUES ('1.1.1.1:1', 5, 0, 1, 1)")
+        conn.commit()
+        conn.close()
+        c = Cache(path=path)
+        c.record_proxy_dead('1.1.1.1:1', 42.0)
+        row = c._connect().execute(
+            'SELECT fails, dead_until FROM proxy_stats WHERE proxy = ?',
+            ('1.1.1.1:1',)).fetchone()
+        assert row == (5, 42.0)  # existing stats preserved
+        c.close()
+
+
 class TestIncrement:
     def test_counts_up(self, cache):
         assert cache.increment('n', ttl=60) == 1
