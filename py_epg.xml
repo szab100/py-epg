@@ -4,17 +4,33 @@
   <cache file="epg_cache_tvmustra.sqlite" enabled="true"
          channel-ttl="604800" program-ttl="2592000"/>
 
+  <!-- Cache TTLs (seconds):
+         channel-ttl  channel data (logo); default 604800 = 7 days
+         program-ttl  program detail data; default 2592000 = 30 days
+         meta-ttl     external metadata lookups; default 7776000 = 90 days
+         listing-ttl  daily programme listings; default 21600 = 6 hours
+                      (kept short so schedule changes propagate; an
+                      interrupted run still resumes almost instantly)
+  -->
+
   <!-- Optional: programme artwork enrichment (takes priority over the
        site's own images when a confident match is found; falls back to
        the site image otherwise). Lookups are cached under the 'meta'
        category (cache meta-ttl, default 90 days), negative results too.
        Attributes:
-         provider   'tmdb' (The Movie Database)
-         api-key    free developer key from themoviedb.org
-                    (Settings -> API -> Request API Key)
+         provider       comma-separated providers, tried in order:
+                        'tmdb'   (The Movie Database - needs tmdb_api_key)
+                        'porthu' (port.hu - best coverage for Hungarian shows,
+                                 undocumented internal endpoint, may break)
+         {name}_{opt}   provider-specific options, e.g. tmdb_api_key =
+                        free developer key from themoviedb.org
+                        (Settings -> API -> Request API Key)
   -->
   <!--
-  <metadata provider="tmdb" api-key="YOUR_TMDB_API_KEY"/>
+  <metadata provider="tmdb,porthu" tmdb_api_key="YOUR_TMDB_API_KEY"/>
+  -->
+  <!-- or port.hu only, no API key needed:
+  <metadata provider="porthu"/>
   -->
 
   <!-- leave empty to use randomly selected fake user_agent values -->

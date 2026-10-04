@@ -27,6 +27,7 @@ from py_epg.common.requests import get_http_session
 from py_epg.common.types import ChannelKey
 from py_epg.common.utils import argparse_str2bool
 from py_epg.scrapers import *
+from py_epg.metadata_providers import *
 
 DEFAULT_POOL_SIZE = 1
 PBAR_NAME_COL_WIDTH = 15
