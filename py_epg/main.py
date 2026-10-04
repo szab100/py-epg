@@ -30,6 +30,21 @@ DEFAULT_POOL_SIZE = 1
 PBAR_NAME_COL_WIDTH = 15
 
 
+def _remove_console_handler(logger: logging.Logger):
+    for h in logger.handlers[:]:
+        if isinstance(h, logging.StreamHandler) and \
+                not isinstance(h, logging.FileHandler):
+            logger.removeHandler(h)
+
+
+def _init_worker(disable_console_log: bool):
+    # Spawned workers re-run dictConfig on import, restoring the console
+    # handler the parent removed - their log output would collide with the
+    # parent's progress bars. Remove it again here.
+    if disable_console_log:
+        _remove_console_handler(logging.getLogger())
+
+
 class PyEPG:
     """Main class of PyEPG"""
 
@@ -45,7 +60,9 @@ class PyEPG:
         pool_size = self._config.find('pool-size')
         self._pool_size = int(
             pool_size.text) if pool_size is not None else DEFAULT_POOL_SIZE
-        self._pool = Pool(self._pool_size)
+        self._pool = Pool(
+            self._pool_size, initializer=_init_worker,
+            initargs=(self._args.progress_bar or self._args.quiet,))
 
     def run(self):
         data = self._fetch_data()
@@ -224,7 +241,7 @@ class PyEPG:
             args.progress_bar = False
         if args.progress_bar or args.quiet:
             # Disable console logging if progress-bar is enabled
-            logging.getLogger().removeHandler(logging.getLogger().handlers[0])
+            _remove_console_handler(logging.getLogger())
         return args
 
     def __getstate__(self):
