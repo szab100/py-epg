@@ -13,13 +13,12 @@ from typing import Dict, List, Set, Tuple
 
 import requests
 import tqdm
-import xmltv
 from dateutil.parser import parse
 from lxml import etree as ET
-from xmltv import xmltv_helpers
 from xmltv.models import Channel, Programme, Tv
 
 from py_epg.common.cache import Cache
+from py_epg.common.xmltv_writer import write_file_from_xml
 from py_epg.common.epg_scraper import EpgScraper
 from py_epg.common.multiprocess_helper import setup_ltree_pickling
 from py_epg.common.proxy import ProxyPool
@@ -75,7 +74,7 @@ class PyEPG:
     def _write_xmltv(self, tv: Tv):
         xmltv_out_file = pathlib.Path(self._config.find('filename').text)
         self._log.info(f'Writing results to {xmltv_out_file}..')
-        xmltv_helpers.write_file_from_xml(xmltv_out_file, tv)
+        write_file_from_xml(xmltv_out_file, tv)
 
     def _fetch_data(self) -> Dict[ChannelKey, List[Programme]]:
         pbar_id = 'All Channels'

@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "py-epg"
-version = "0.2.9"
+version = "0.4.0"
 description = "py_epg is an easy to use, modular, multi-process EPG grabber written in Python."
 authors = ["Szabolcs Fruhwald <mail@szab100.com>"]
 keywords = ["xmltv", "epg"]
@@ -23,8 +23,6 @@ PyYAML = "^6.0.2"
 py-xmltv = "^1.0.8"
 roman = "^5.0"
 tqdm = "^4.67.0"
-# py-xmltv's xmltv_helpers imports pkg_resources, removed in setuptools >=81
-setuptools = "<81"
 # py-xmltv models were generated for the 21.x xsdata API
 xsdata = "^21.9"
 pysocks = "^1.7.1"
