@@ -25,8 +25,8 @@
          {name}_{opt}   provider-specific options, e.g. tmdb_api_key =
                         free developer key from themoviedb.org
                         (Settings -> API -> Request API Key)
-         workers        parallel lookup threads for the batched artwork
-                        pass (deduplicated across channels). Default: 8
+       Lookups run on the same worker pool as scraping (deduplicated
+       across channels) - parallelism follows <pool-size>.
   -->
   <!--
   <metadata provider="tmdb,porthu" tmdb_api_key="YOUR_TMDB_API_KEY"/>

@@ -29,7 +29,8 @@ RE_MIXED_DESCRIPTION = re.compile(
 )
 
 RE_SEASON_EPISODE = re.compile(
-    r"((?=[MDCLXVI])M*D?C{0,4}L?X{0,4}V?I{0,4})\.\/([0-9]+)\.")
+    r"((?=[MDCLXVI])M{0,4}(?:CM|CD|D?C{0,3})?(?:XC|XL|L?X{0,3})?"
+    r"(?:IX|IV|V?I{0,3})?)\.\/([0-9]+)\.")
 RE_EPISODE_RANGE = re.compile(r"([0-9]+)\.-([0-9]+)\.")
 RE_SINGLE_EPISODE = re.compile(r"([0-9]+)\.")
 
@@ -190,7 +191,9 @@ class MusorTvMobile(EpgScraper):
             xmltv_ns = f'{season - 1}.{episode - 1}.' if season > 0 else f'.{episode - 1}.'
             program.episode_num = [EpisodeNum(content=[onscreen], system='onscreen'),
                                    EpisodeNum(content=[xmltv_ns], system='xmltv_ns')]
-            stripped_title = title.rsplit(' ', 1)[0]
+            # drop the dangling separator left behind by the marker
+            # ('Cím - IV./12. rész' -> 'Cím') without eating title words
+            stripped_title = title.rstrip(' -–—:')
             program.title = [Title(content=[stripped_title], lang='hu')]
 
     def _set_prg_sub_title_and_year(self, program, prg):
@@ -199,7 +202,7 @@ class MusorTvMobile(EpgScraper):
             subtitle = prg_sub_title.get_text(strip=True)
             parts = subtitle.split(',')
             if len(parts) > 1:
-                year = parts[-1]
+                year = parts[-1].strip()
                 if '-' in year:
                     # 2005-2010 => pick end year, eg. 2010
                     year = year.split('-')[-1]

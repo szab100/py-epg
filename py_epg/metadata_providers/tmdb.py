@@ -180,7 +180,9 @@ class TmdbMetadata(MetadataProvider):
         gmap = {}
         cache_key = f'meta:tmdb:genres:{media_type}'
         if self._cache is not None:
-            gmap = self._cache.get(cache_key) or {}
+            # JSON object keys come back as strings - restore int ids
+            gmap = {int(k): v
+                    for k, v in (self._cache.get(cache_key) or {}).items()}
         if not gmap:
             try:
                 r = self._http.get(
