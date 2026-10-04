@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "py-epg"
-version = "0.5.3-b.12"
+version = "0.6.0-b.1"
 description = "py_epg is an easy to use, modular, multi-process EPG grabber written in Python."
 authors = ["Szabolcs Fruhwald <mail@szab100.com>"]
 keywords = ["xmltv", "epg"]
@@ -29,10 +29,20 @@ pysocks = "^1.7.1"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.0"
+pytest-cov = "^6.0"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
+addopts = "--cov=py_epg --cov-report=term-missing"
+filterwarnings = [
+    # xsdata 21.x is pinned for the generated xmltv models and is not
+    # yet compatible with Python 3.14's _eval_type signature change
+    "ignore:Failing to pass a value to the 'type_params':DeprecationWarning:xsdata",
+]
+
+[tool.coverage.run]
+source = ["py_epg"]
 
 [tool.poetry.scripts]
 epg = "py_epg.main:main"

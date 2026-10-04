@@ -175,3 +175,109 @@ class TestGetProgramDetails:
         d2 = s._get_program_details('tab', '1')
         assert d1 == d2
         s._get_json.assert_called_once()
+
+    def test_request_error_returns_empty(self):
+        import requests
+        s = make_scraper()
+        s._get_json = MagicMock(
+            side_effect=requests.ConnectionError('down'))
+        assert s._get_program_details('tab', '1') == {}
+
+
+class TestSiteMeta:
+    def test_site_name(self):
+        assert make_scraper().site_name() == 'tvmustra.hu'
+
+    def test_today_is_a_date(self):
+        assert isinstance(make_scraper().today(), date)
+
+
+class TestFetchChannel:
+    def test_logo_extracted_and_cached(self, cache):
+        s = make_scraper(cache=cache)
+        s._get_soup = MagicMock(return_value=BeautifulSoup(
+            '<div class="ch-logo-white-bg"><img src="/logo.png"/></div>',
+            'html.parser'))
+        ch = s.fetch_channel('MR1KOSSUTH', 'Kossuth')
+        assert ch.id == 'MR1KOSSUTH.TVMUSTRA.HU'
+        assert ch.icon.src == 'https://www.tvmustra.hu/logo.png'
+        s.fetch_channel('MR1KOSSUTH', 'Kossuth')   # cached
+        s._get_soup.assert_called_once()
+
+    def test_missing_logo_leaves_icon_none(self):
+        s = make_scraper()
+        s._get_soup = MagicMock(
+            return_value=BeautifulSoup('<div/>', 'html.parser'))
+        ch = s.fetch_channel('X', 'n')
+        assert ch.icon is None
+
+
+class TestFetchPrograms:
+    DETAILS = {
+        'icon': None, 'orig_title': None, 'sub_titles': [], 'descs': [],
+        'directors': [], 'actors': [], 'date': '2020',
+        'category': None, 'country': None, 'season': None,
+        'episode': None, 'length_min': None, 'age_rating': None,
+        'previously_shown': False}
+
+    def test_cached_listing_builds_programs(self, cache):
+        s = make_scraper(cache=cache)
+        entries = [
+            {'table': 't', 'id': '1', 'title': 'A',
+             'start': '20240115060000 +0100'},
+            {'table': 't', 'id': '2', 'title': 'B',
+             'start': '20240115070000 +0100'},
+        ]
+        cache.set('listing:tvmustra.hu:CH:2024-01-15', entries, 'listing')
+        s._get_program_details = MagicMock(
+            side_effect=[dict(self.DETAILS), {}])
+        channel = MagicMock(id='CH.TVMUSTRA.HU')
+        progs = s.fetch_programs(channel, 'CH', date(2024, 1, 15))
+        assert [p.title[0].content[0] for p in progs] == ['A', 'B']
+        # one missing detail -> logged, programme kept with listing data
+        assert progs[0].date == '2020'
+        assert progs[1].date is None
+        s._get_soup = MagicMock()
+        assert not s._get_soup.called    # listing came from cache
+
+    def test_uncached_listing_fetched_then_cached(self, cache):
+        s = make_scraper(cache=cache)
+        s._fetch_listing = MagicMock(return_value=[
+            {'table': 't', 'id': '1', 'title': 'A',
+             'start': '20240115060000 +0100'}])
+        s._get_program_details = MagicMock(return_value={})
+        channel = MagicMock(id='CH.TVMUSTRA.HU')
+        s.fetch_programs(channel, 'CH', date(2024, 1, 15))
+        s.fetch_programs(channel, 'CH', date(2024, 1, 15))
+        s._fetch_listing.assert_called_once()  # second run from cache
+
+
+class TestAbsUrl:
+    @pytest.mark.parametrize('src,expected', [
+        (None, None),
+        ('', None),
+        ('/x.png', 'https://www.tvmustra.hu/x.png'),
+        ('http://cdn/x.png', 'http://cdn/x.png'),
+        ('relative.png', None),
+    ])
+    def test_abs_url(self, src, expected):
+        assert make_scraper()._abs_url(src) == expected
+
+
+class TestHttpHelpers:
+    def test_get_soup(self):
+        s = make_scraper()
+        resp = MagicMock()
+        resp.text = '<div class="x">t</div>'
+        s._http.get.return_value = resp
+        soup_result = s._get_soup('http://x')
+        assert soup_result.select_one('div.x').text == 't'
+        resp.raise_for_status.assert_called_once()
+
+    def test_get_json(self):
+        s = make_scraper()
+        resp = MagicMock()
+        resp.json.return_value = {'ok': 1}
+        s._http.get.return_value = resp
+        assert s._get_json('http://x') == {'ok': 1}
+        resp.raise_for_status.assert_called_once()

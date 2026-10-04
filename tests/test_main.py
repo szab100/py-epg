@@ -3,14 +3,20 @@
 per-programme field application and stop-time synthesis."""
 
 import logging
+import sys
+from datetime import date
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 import pytest
-from xmltv.models import (Category, Country, Desc, Icon, Programme,
-                          Rating, SubTitle, Title)
+from lxml import etree as ET
+from xmltv.models import (Category, Channel, Country, Desc, DisplayName,
+                          Icon, Programme, Rating, SubTitle, Title)
 
-from py_epg.main import PyEPG
+from py_epg.common.proxy import ProxyPool
+from py_epg.common.types import ChannelKey
+from py_epg.main import (PyEPG, _init_worker, _remove_console_handler,
+                         main)
 
 
 def make_app(metadata=None, pool_size=1):
@@ -227,3 +233,372 @@ class TestDedupePrograms:
         programs = app._dedupe_programs([p1, p2, p3])
         app._post_process_programs(programs)
         assert programs[0].stop == '20240115070000 +0100'
+
+
+def cfg_xml(body):
+    return ET.ElementTree(ET.fromstring(f'<settings>{body}</settings>'))
+
+
+def chan_el(site='site.hu', site_id='a', name='Chan'):
+    return ET.fromstring(
+        f'<channel site="{site}" site_id="{site_id}" '
+        f'xmltv_id="x">{name}</channel>')
+
+
+def fake_scraper(channel_id='A.SITE.HU', programmes_per_day=1):
+    s = MagicMock()
+    s.site_name.return_value = 'site.hu'
+    s.fetch_channel.side_effect = lambda sid, name: Channel(
+        id=f'{sid}.{channel_id.split(".", 1)[-1]}'.upper(),
+        display_name=[DisplayName(content=[name])])
+    s.today.return_value = date(2024, 1, 15)
+    s.fetch_programs.side_effect = lambda c, sid, d: [
+        prog(start=d.strftime('%Y%m%d') + '060000 +0100')
+        for _ in range(programmes_per_day)]
+    return s
+
+
+def patch_worker_identity(monkeypatch):
+    """_fetch_channel reads process identity for the progress bar."""
+    monkeypatch.setattr(
+        'py_epg.main.current_process',
+        lambda: SimpleNamespace(_identity=(0,)))
+
+
+class TestConsoleHandlers:
+    def test_removes_stream_but_keeps_file(self, tmp_path):
+        logger = logging.getLogger('handler-test')
+        stream = logging.StreamHandler()
+        file_h = logging.FileHandler(tmp_path / 'x.log')
+        logger.addHandler(stream)
+        logger.addHandler(file_h)
+        try:
+            _remove_console_handler(logger)
+            assert stream not in logger.handlers
+            assert file_h in logger.handlers
+        finally:
+            logger.removeHandler(file_h)
+            file_h.close()
+
+    def test_init_worker_disabled_is_noop(self):
+        before = list(logging.getLogger().handlers)
+        _init_worker(False)
+        assert logging.getLogger().handlers == before
+
+
+class TestParseArgs:
+    def parse(self, argv):
+        import unittest.mock
+        with unittest.mock.patch.object(sys, 'argv', argv):
+            return PyEPG._parse_args()
+
+    def test_requires_config_or_stats(self):
+        with pytest.raises(SystemExit):
+            self.parse(['epg'])
+
+    def test_stats_mode(self):
+        args = self.parse(['epg', '--stats', 'epg.xml'])
+        assert args.stats == 'epg.xml'
+        assert args.config is None
+
+    def test_quiet_disables_progress_bar(self):
+        args = self.parse(['epg', '-c', 'c.xml', '-q'])
+        assert args.quiet and args.progress_bar is False
+
+    def test_json_flag(self):
+        args = self.parse(['epg', '--stats', 'e.xml', '--json'])
+        assert args.json is True
+
+
+class TestInit:
+    def test_full_init(self, tmp_path, monkeypatch):
+        cfg = tmp_path / 'py_epg.xml'
+        cfg.write_text(
+            '<settings><filename>out.xml</filename>'
+            '<user-agent>test</user-agent></settings>')
+        monkeypatch.setattr(sys, 'argv', ['epg', '-c', str(cfg)])
+        monkeypatch.setattr('py_epg.main.Pool',
+                            lambda *a, **k: MagicMock())
+        app = PyEPG()
+        assert app._pool_size == 1
+        assert set(app._epg_scrapers) == {
+            'port.hu', 'tvmustra.hu', 'm.musor.tv'}
+
+    def test_pool_size_from_config(self, tmp_path, monkeypatch):
+        cfg = tmp_path / 'py_epg.xml'
+        cfg.write_text(
+            '<settings><filename>o.xml</filename><pool-size>7</pool-size>'
+            '<user-agent>t</user-agent></settings>')
+        monkeypatch.setattr(sys, 'argv', ['epg', '-c', str(cfg)])
+        monkeypatch.setattr('py_epg.main.Pool',
+                            lambda *a, **k: MagicMock())
+        assert PyEPG()._pool_size == 7
+
+
+class TestBuildProxy:
+    def app(self, body):
+        app = make_app()
+        app._config = cfg_xml(body)
+        app._cache = MagicMock()
+        return app
+
+    def test_no_proxy_returns_none(self):
+        assert self.app('<x/>')._build_proxy() is None
+
+    def test_static_proxy_returns_url(self):
+        assert self.app('<proxy>http://h:1</proxy>')._build_proxy() == \
+            'http://h:1'
+
+    def test_proxy_list_builds_pool(self):
+        pool = self.app(
+            '<proxy-list cooldown="60">'
+            '<proxy>http://a:1</proxy>'
+            '</proxy-list>')._build_proxy()
+        assert isinstance(pool, ProxyPool)
+        assert 'http://a:1' in pool._proxies
+
+
+class TestBuildCache:
+    def test_disabled_without_element(self):
+        app = make_app()
+        app._config = cfg_xml('<x/>')
+        assert app._build_cache()._enabled is False
+
+    def test_disabled_by_attribute(self):
+        app = make_app()
+        app._config = cfg_xml('<cache enabled="false"/>')
+        assert app._build_cache()._enabled is False
+
+    def test_enabled_with_ttls(self, tmp_path):
+        app = make_app()
+        db = tmp_path / 'c.sqlite'
+        app._config = cfg_xml(
+            f'<cache file="{db}" enabled="true" '
+            'listing-ttl="10" meta-ttl="20"/>')
+        c = app._build_cache()
+        assert c._enabled is True
+        assert c._ttls['listing'] == 10 and c._ttls['meta'] == 20
+        c.close()
+
+
+class TestBuildMetadata:
+    def test_no_metadata_element_returns_none(self):
+        app = make_app()
+        app._config = cfg_xml('<x/>')
+        app._proxy = None
+        app._cache = MagicMock()
+        assert app._build_metadata() is None
+
+    def test_workers_attribute_warns_and_ignored(self, caplog):
+        app = make_app()
+        app._config = cfg_xml('<metadata workers="9" provider="x"/>')
+        app._proxy = None
+        app._cache = MagicMock()
+        with caplog.at_level(logging.WARNING):
+            assert app._build_metadata() is None  # unknown provider
+        assert "'workers' attribute is ignored" in caplog.text
+
+    def test_proxy_pool_builds_rotating_session(self):
+        from py_epg.common.proxy import RotatingProxySession
+        app = make_app()
+        app._config = cfg_xml('<metadata provider="bogus"/>')
+        app._proxy = ProxyPool()
+        app._cache = MagicMock()
+        assert app._build_metadata() is None
+
+
+class TestRequestDelay:
+    def test_absent_defaults_zero(self):
+        app = make_app()
+        app._config = cfg_xml('<x/>')
+        assert app._request_delay() == 0.0
+
+    def test_reads_element(self):
+        app = make_app()
+        app._config = cfg_xml('<request-delay>2.5</request-delay>')
+        assert app._request_delay() == 2.5
+
+
+class TestInitEpgScrapers:
+    def test_all_sites_registered(self):
+        app = make_app()
+        app._config = cfg_xml('<user-agent>t</user-agent>')
+        app._proxy = None
+        app._cache = MagicMock()
+        scrapers = app._init_epg_scrapers()
+        assert set(scrapers) == {'port.hu', 'tvmustra.hu', 'm.musor.tv'}
+
+
+class TestFetchChannel:
+    def test_fetches_each_day(self, monkeypatch):
+        patch_worker_identity(monkeypatch)
+        app = make_app()
+        app._config = cfg_xml('<timespan>2</timespan>')
+        scraper = fake_scraper()
+        app._epg_scrapers = {'site.hu': scraper}
+        key, programs = app._fetch_channel(chan_el())
+        assert key.id == 'A.SITE.HU'
+        assert len(programs) == 2
+        assert scraper.fetch_programs.call_count == 2
+
+    def test_channel_fetch_error_returns_empty(self, monkeypatch):
+        import requests
+        patch_worker_identity(monkeypatch)
+        app = make_app()
+        app._config = cfg_xml('<timespan>1</timespan>')
+        scraper = fake_scraper()
+        scraper.fetch_channel.side_effect = requests.ConnectionError('x')
+        app._epg_scrapers = {'site.hu': scraper}
+        key, programs = app._fetch_channel(chan_el(site_id='a'))
+        assert key.id == 'A'          # upper-cased site id
+        assert key.channel is None
+        assert programs == []
+
+    def test_day_failure_skipped_others_kept(self, monkeypatch):
+        import requests
+        patch_worker_identity(monkeypatch)
+        app = make_app()
+        app._config = cfg_xml('<timespan>2</timespan>')
+        scraper = fake_scraper()
+        scraper.fetch_programs.side_effect = [
+            requests.ConnectionError('down'), [prog()]]
+        app._epg_scrapers = {'site.hu': scraper}
+        _, programs = app._fetch_channel(chan_el())
+        assert len(programs) == 1     # failed day skipped, not fatal
+
+    def test_unknown_site_raises(self, monkeypatch):
+        patch_worker_identity(monkeypatch)
+        app = make_app()
+        app._config = cfg_xml('<timespan>1</timespan>')
+        app._epg_scrapers = {}
+        with pytest.raises(RuntimeError, match='scraper'):
+            app._fetch_channel(chan_el())
+
+
+class TestFetchData:
+    def test_collects_per_channel(self, monkeypatch):
+        patch_worker_identity(monkeypatch)
+        app = make_app()
+        app._config = cfg_xml(
+            '<timespan>1</timespan>'
+            '<channel site="site.hu" site_id="a" xmltv_id="x">A</channel>'
+            '<channel site="site.hu" site_id="b" xmltv_id="y">B</channel>')
+        scraper = fake_scraper()
+        app._epg_scrapers = {'site.hu': scraper}
+        data = app._fetch_data()
+        assert len(data) == 2
+        assert all(len(v) == 1 for v in data.values())
+
+    def test_missing_site_raises(self):
+        app = make_app()
+        app._config = cfg_xml(
+            '<channel site="nowhere.tv" site_id="a" xmltv_id="x">A</channel>')
+        app._epg_scrapers = {'site.hu': MagicMock()}
+        with pytest.raises(RuntimeError, match='nowhere.tv'):
+            app._fetch_data()
+
+
+class TestBuildXmltv:
+    def test_channels_sorted_and_programs_processed(self):
+        app = make_app()
+        c1 = Channel(id='B.HU', display_name=[DisplayName(content=['b'])])
+        c2 = Channel(id='A.HU', display_name=[DisplayName(content=['a'])])
+        p1 = prog(start='20240115070000 +0100')
+        p2 = prog(start='20240115060000 +0100')
+        data = {ChannelKey('B.HU', c1): [p1],
+                ChannelKey('A.HU', c2): [p2]}
+        tv, programs = app._build_xmltv(data)
+        assert [c.id for c in tv.channel] == ['A.HU', 'B.HU']
+        assert programs[0].start < programs[1].start
+        # stop synthesized for the trailing programme
+        assert p1.stop.endswith('235959 +0100')
+
+    def test_channel_without_channel_object_omitted(self):
+        app = make_app()
+        data = {ChannelKey('GONE', None): []}
+        tv, _ = app._build_xmltv(data)
+        assert not tv.channel
+
+
+class TestWriteXmltv:
+    def test_writes_declared_xml(self, tmp_path):
+        app = make_app()
+        out = tmp_path / 'epg.xml'
+        app._config = cfg_xml(f'<filename>{out}</filename>')
+        from xmltv.models import Tv
+        app._write_xmltv(Tv([], []))
+        assert out.read_text().startswith('<?xml version="1.0"')
+
+
+class TestRun:
+    def _configured_app(self, tmp_path, monkeypatch, **kwargs):
+        patch_worker_identity(monkeypatch)
+        app = make_app(**kwargs)
+        out = tmp_path / 'epg.xml'
+        app._config = cfg_xml(
+            f'<filename>{out}</filename><timespan>1</timespan>'
+            '<channel site="site.hu" site_id="a" xmltv_id="x">A</channel>')
+        app._epg_scrapers = {'site.hu': fake_scraper()}
+        app._proxy = None
+        return app, out
+
+    def test_writes_file_without_metadata(self, tmp_path, monkeypatch):
+        app, out = self._configured_app(tmp_path, monkeypatch)
+        app.run()
+        text = out.read_text()
+        assert 'A.SITE.HU' in text
+
+    def test_metadata_pass_and_proxy_stats(self, tmp_path, monkeypatch):
+        app, out = self._configured_app(
+            tmp_path, monkeypatch, metadata=MagicMock())
+        app._proxy = ProxyPool()
+        app.run()
+        assert out.exists()
+        app._metadata.metadata_for.assert_not_called()  # no _meta_lookup
+
+    def test_metadata_failure_is_logged_not_fatal(
+            self, tmp_path, monkeypatch):
+        app, out = self._configured_app(
+            tmp_path, monkeypatch, metadata=MagicMock())
+        app._apply_metadata = MagicMock(
+            side_effect=RuntimeError('meta exploded'))
+        app.run()                      # must not raise
+        assert out.exists()            # the pre-enrichment file survives
+
+
+class TestMain:
+    def test_stats_mode_does_not_need_config(
+            self, tmp_path, monkeypatch, capsys):
+        epg = tmp_path / 'e.xml'
+        epg.write_text('<tv><channel id="X"><display-name>x</display-name>'
+                       '</channel></tv>')
+        monkeypatch.setattr(sys, 'argv', ['epg', '--stats', str(epg)])
+        main()
+        assert 'CHANNELS' in capsys.readouterr().out
+
+    def test_stats_json(self, tmp_path, monkeypatch, capsys):
+        import json
+        epg = tmp_path / 'e.xml'
+        epg.write_text('<tv><channel id="X"/></tv>')
+        monkeypatch.setattr(
+            sys, 'argv', ['epg', '--stats', str(epg), '--json'])
+        main()
+        assert json.loads(capsys.readouterr().out)['channels']['total'] == 1
+
+    def test_normal_mode_builds_app(self, monkeypatch):
+        cls = MagicMock()
+        cls._parse_args.return_value = SimpleNamespace(
+            stats=None, config='c.xml')
+        monkeypatch.setattr('py_epg.main.PyEPG', cls)
+        monkeypatch.setattr(sys, 'argv', ['epg', '-c', 'c.xml'])
+        main()
+        cls.return_value.run.assert_called_once()
+
+    def test_python_m_entrypoint(self, tmp_path, monkeypatch, capsys):
+        """python -m py_epg --stats <file> works end to end."""
+        import runpy
+        epg = tmp_path / 'e.xml'
+        epg.write_text('<tv><channel id="X"/></tv>')
+        monkeypatch.setattr(sys, 'argv', ['py_epg', '--stats', str(epg)])
+        runpy.run_module('py_epg', run_name='__main__')
+        assert 'CHANNELS' in capsys.readouterr().out

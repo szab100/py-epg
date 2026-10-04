@@ -11,3 +11,4 @@ publish.sh
 *.sqlite-journal
 *.sqlite-wal
 *.sqlite-shm
+.coverage*

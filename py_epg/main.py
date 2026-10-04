@@ -447,7 +447,8 @@ class PyEPG:
     def _read_config(self) -> Dict:
         return ET.parse(self._args.config)
 
-    def _parse_args(self):
+    @staticmethod
+    def _parse_args():
         # Initialize parser
         parser = argparse.ArgumentParser(
             prog='py_epg',
@@ -458,10 +459,19 @@ class PyEPG:
         parser.add_argument(
             "-q", "--quiet", help="Quiet mode (no progress-bar, no console logs). Default: False",
             default=False, type=argparse_str2bool, nargs='?', const=True)
+        parser.add_argument(
+            "--stats", metavar='XMLTV_FILE',
+            help="Print statistics for an XMLTV file and exit "
+                 "(no config needed)")
+        parser.add_argument(
+            "--json", help="JSON output (with --stats). Default: False",
+            default=False, type=argparse_str2bool, nargs='?', const=True)
         requiredArgs = parser.add_argument_group('required arguments')
         requiredArgs.add_argument(
-            "-c", "--config", help="Path to py_epg.xml file", required=True)
+            "-c", "--config", help="Path to py_epg.xml file")
         args = parser.parse_args()
+        if not args.stats and not args.config:
+            parser.error('one of -c/--config or --stats is required')
 
         if args.quiet:
             args.progress_bar = False
@@ -480,5 +490,10 @@ class PyEPG:
 
 
 def main(args=None):
+    cli_args = PyEPG._parse_args()
+    if cli_args.stats:
+        from py_epg.stats import print_stats
+        print_stats(cli_args.stats, json_out=cli_args.json)
+        return
     py_epg = PyEPG()
     py_epg.run()

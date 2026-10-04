@@ -87,6 +87,7 @@ class TestPickling:
         clone = pickle.loads(pickle.dumps(cache))
         assert clone._conn is None  # connection not carried over
         assert clone.get('k') == {'v': 1}  # lazily reconnects, data shared
+        clone.close()
 
 
 class TestProxyStats:

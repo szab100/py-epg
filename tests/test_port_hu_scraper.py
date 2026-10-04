@@ -8,6 +8,7 @@ from datetime import date
 from unittest.mock import MagicMock
 
 import pytest
+import requests
 from xmltv.models import Programme, Title
 
 from py_epg.scrapers.port_hu import PortHu
@@ -226,3 +227,91 @@ class TestFetchPrograms:
         progs = s.fetch_programs(MagicMock(id='CH'), 'c',
                                  date(2024, 1, 15))
         assert len(progs) == 1
+
+
+class TestSiteMeta:
+    def test_site_name(self):
+        assert make_scraper().site_name() == 'port.hu'
+
+    def test_today_is_a_date(self):
+        assert isinstance(make_scraper().today(), date)
+
+
+class TestHttpHelpers:
+    def test_bootstrap_once_then_requests(self):
+        s = make_scraper()
+        resp = MagicMock()
+        resp.json.return_value = {'ok': True}
+        s._http.get.return_value = resp
+        assert s._get_json('http://x') == {'ok': True}
+        s._get_text('http://y')
+        urls = [c.args[0] for c in s._http.get.call_args_list]
+        # landing page fetched once for the session cookie
+        assert urls == ['https://port.hu', 'http://x', 'http://y']
+
+    def test_get_text_returns_body(self):
+        s = make_scraper()
+        resp = MagicMock()
+        resp.text = '<html/>'
+        s._http.get.return_value = resp
+        assert s._get_text('http://x') == '<html/>'
+        resp.raise_for_status.assert_called()
+
+
+class TestChannelMap:
+    def test_map_built_and_cached(self, cache):
+        s = make_scraper(cache=cache)
+        s._get_json = MagicMock(return_value={'channels': [
+            {'id': 'tvchannel-1', 'name': 'M1', 'logo': 'http://x/l.png'},
+            {'id': 'tvchannel-2', 'name': 'M2'},  # no logo
+        ]})
+        cmap = s._channel_map()
+        assert cmap['tvchannel-1'] == {'name': 'M1',
+                                       'logo': 'http://x/l.png'}
+        assert cmap['tvchannel-2'] == {'name': 'M2', 'logo': None}
+        s._channel_map()  # second call served from cache
+        s._get_json.assert_called_once()
+
+
+class TestFetchChannel:
+    def test_known_id_returns_channel(self, cache):
+        s = make_scraper(cache=cache)
+        s._get_json = MagicMock(return_value={'channels': [
+            {'id': 'tvchannel-1', 'name': 'M1', 'logo': 'http://x/l.png'}]})
+        ch = s.fetch_channel('tvchannel-1', 'M1')
+        assert ch.id == 'TVCHANNEL-1.PORT.HU'
+        assert ch.icon.src == 'http://x/l.png'
+        # channel entry itself is cached - no second API call
+        s.fetch_channel('tvchannel-1', 'M1')
+        s._get_json.assert_called_once()
+
+    def test_unknown_id_raises(self):
+        s = make_scraper()
+        s._get_json = MagicMock(return_value={'channels': []})
+        with pytest.raises(requests.RequestException, match='unknown'):
+            s.fetch_channel('tvchannel-999', 'X')
+
+
+class TestGetProgramDetails:
+    def test_no_film_url_returns_empty(self):
+        assert make_scraper()._get_program_details('movie-1', None) == {}
+
+    def test_cached_value_returned(self, cache):
+        s = make_scraper(cache=cache)
+        cache.set('program:port.hu:movie-1', {'desc': 'd'}, 'program')
+        assert s._get_program_details('movie-1', '/film/x') == \
+            {'desc': 'd'}
+
+    def test_fetch_failure_returns_empty(self):
+        s = make_scraper()
+        s._get_text = MagicMock(
+            side_effect=requests.ConnectionError('down'))
+        assert s._get_program_details('movie-1', '/film/x') == {}
+
+    def test_relative_url_resolved_and_cached(self, cache):
+        s = make_scraper(cache=cache)
+        s._get_text = MagicMock(
+            return_value='<html></html>')  # no ld+json -> {}
+        assert s._get_program_details('movie-1', '/film/x') == {}
+        s._get_text.assert_called_once_with('https://port.hu/film/x')
+        # the empty parse result is still cached - retried only on TTL
