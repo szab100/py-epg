@@ -242,6 +242,19 @@ class Cache:
         except sqlite3.Error as e:
             log.debug(f'Failed to record proxy bench for {proxy}: {e}')
 
+    def proxy_stats(self) -> list:
+        """All proxy_stats rows as dicts (cumulative across runs and
+        worker processes), worst offenders first. [] when disabled."""
+        if not self._enabled:
+            return []
+        with self._lock:
+            cur = self._connect().execute(
+                'SELECT proxy, fails, successes, last_fail, '
+                'last_success, first_seen, last_seen, dead_until '
+                'FROM proxy_stats ORDER BY fails DESC')
+            cols = [d[0] for d in cur.description]
+            return [dict(zip(cols, r)) for r in cur.fetchall()]
+
     def close(self):
         with self._lock:
             if self._conn is not None:

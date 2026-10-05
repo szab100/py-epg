@@ -300,9 +300,11 @@ class ProxyPool:
                     f'({alive}/{len(self._proxies)} alive)')
 
     def stats(self):
+        # _alive() also consults the shared 'proxy:dead:*' markers, so
+        # this reflects benches recorded by worker pool copies, not just
+        # this process's own state
         now = time.monotonic()
-        alive = sum(1 for s in self._proxies.values()
-                    if s['dead_until'] <= now)
+        alive = sum(1 for k in self._proxies if self._alive(k, now))
         return {'total': len(self._proxies), 'alive': alive}
 
 
@@ -389,9 +391,12 @@ class RotatingProxySession(requests.Session):
                 last_error = e
         if self._pool.allow_direct:
             if last_error is not None or last_resp is not None:
-                log.warning(
-                    'All proxies failed, falling back to direct connection '
-                    f'for {url}')
+                self._warn_direct(url, 'All proxies failed')
+            elif not self._pool._proxies:
+                self._warn_direct(url, 'Proxy pool is empty')
+            else:
+                self._warn_direct(
+                    url, 'No healthy proxies (all benched or paced)')
             kwargs.pop('proxies', None)
             return super().request(method, url, **kwargs)
         if last_error is not None:
@@ -401,9 +406,53 @@ class RotatingProxySession(requests.Session):
         raise requests.exceptions.ConnectionError(
             'No healthy proxies available in the pool')
 
+    def _warn_direct(self, url, reason):
+        # the shared claim caps this at one warning per minute across
+        # all workers - a fully benched pool would otherwise warn on
+        # every single request
+        db = self._pool._stats_db
+        if db is not None and not db.claim('proxy:warn:direct', 60):
+            return
+        log.warning(
+            f'{reason}, falling back to direct connection for {url}')
+
 
 def get_proxy_session(pool: ProxyPool,
                       user_agent=None,
                       request_delay=0.0) -> RotatingProxySession:
     return RotatingProxySession(pool, user_agent=user_agent,
                                 request_delay=request_delay)
+
+
+def format_proxy_stats(rows, top=10) -> str:
+    """Renders proxy_stats table rows (Cache.proxy_stats()) as a report:
+    a summary line plus the `top` worst proxies."""
+    if not rows:
+        return 'no proxy usage recorded yet'
+    now = time.time()
+    benched = sum(1 for r in rows
+                  if r['dead_until'] and r['dead_until'] > now)
+    ok = sum(r['successes'] for r in rows)
+    fails = sum(r['fails'] for r in rows)
+    lines = [
+        f'{len(rows)} proxies seen, {benched} currently benched, '
+        f'{ok} proxied requests ok, {fails} failed']
+    for r in rows[:top]:
+        last = time.strftime('%Y-%m-%d %H:%M',
+                             time.localtime(r['last_seen']))
+        dead = ''
+        if r['dead_until'] and r['dead_until'] > now:
+            dead = ' benched-until=' + time.strftime(
+                '%H:%M', time.localtime(r['dead_until']))
+        lines.append(
+            f"  {r['proxy']:<22} ok={r['successes']:<6} "
+            f"fails={r['fails']:<5} last={last}{dead}")
+    if len(rows) > top:
+        lines.append(f'  ... and {len(rows) - top} more')
+    return '\n'.join(lines)
+
+
+def print_proxy_stats(db_path='epg_cache.sqlite'):
+    """Dumps the persistent per-proxy stats table (for --proxy-stats)."""
+    from py_epg.common.cache import Cache
+    print(format_proxy_stats(Cache(db_path).proxy_stats()))

@@ -107,6 +107,43 @@ class TestProxyPool:
         clone = pickle_roundtrip(pool)
         assert clone.acquire() == 'http://1.1.1.1:1'
 
+    def test_stats_reflect_shared_benches(self, cache):
+        # a bench recorded by another pool copy (a worker) counts
+        # towards this copy's alive total too
+        a = ProxyPool(proxies=['1.1.1.1:1', '2.2.2.2:2'], max_fails=1,
+                      stats_db=cache)
+        b = ProxyPool(proxies=['1.1.1.1:1', '2.2.2.2:2'], max_fails=1,
+                      stats_db=cache)
+        a.report_failure('http://1.1.1.1:1')
+        assert b.stats() == {'total': 2, 'alive': 1}
+
+
+class TestProxyReport:
+    def test_cache_proxy_stats_rows(self, cache):
+        cache.record_proxy_result('1.2.3.4:8080', ok=False)
+        cache.record_proxy_result('1.2.3.4:8080', ok=True)
+        cache.record_proxy_dead('1.2.3.4:8080', time.time() + 600)
+        rows = cache.proxy_stats()
+        assert rows[0]['proxy'] == '1.2.3.4:8080'
+        assert rows[0]['fails'] == 1 and rows[0]['successes'] == 1
+        assert rows[0]['dead_until'] > time.time()
+
+    def test_format_proxy_stats(self):
+        from py_epg.common.proxy import format_proxy_stats
+        assert 'no proxy usage' in format_proxy_stats([])
+        out = format_proxy_stats([{
+            'proxy': '1.2.3.4:8080', 'fails': 2, 'successes': 5,
+            'last_fail': None, 'last_success': None,
+            'first_seen': time.time(), 'last_seen': time.time(),
+            'dead_until': time.time() + 600}])
+        assert '1 proxies seen' in out
+        assert '1 currently benched' in out
+        assert '1.2.3.4:8080' in out and 'benched-until=' in out
+
+    def test_disabled_cache_returns_no_rows(self):
+        from py_epg.common.cache import Cache
+        assert Cache(enabled=False).proxy_stats() == []
+
 
 class TestRotatingProxySession:
     def _session(self, **pool_kw):
@@ -154,6 +191,35 @@ class TestRotatingProxySession:
             assert s.request('GET', 'http://x') is ok
             # final call went out without proxies
             assert 'proxies' not in sup.call_args.kwargs
+
+    def test_benched_pool_direct_fallback_warns(self):
+        """All proxies already benched before the request must still
+        surface a warning - acquire() returning None early used to fall
+        back to a direct connection silently."""
+        s = self._session(proxies=['1.1.1.1:1'], max_fails=1,
+                          allow_direct=True)
+        s._pool.report_failure('http://1.1.1.1:1')   # bench it
+        ok = MagicMock(status_code=200)
+        with patch('py_epg.common.proxy.log') as log, \
+                patch.object(requests.Session, 'request',
+                             return_value=ok):
+            assert s.request('GET', 'http://x') is ok
+        assert 'No healthy proxies' in log.warning.call_args.args[0]
+
+    def test_direct_fallback_warning_deduped_via_db(self, cache):
+        """With a shared stats DB the warning fires at most once per
+        claim window - otherwise a benched pool spams every request."""
+        s = RotatingProxySession(
+            ProxyPool(proxies=['1.1.1.1:1'], max_fails=1,
+                      allow_direct=True, stats_db=cache))
+        s._pool.report_failure('http://1.1.1.1:1')
+        ok = MagicMock(status_code=200)
+        with patch('py_epg.common.proxy.log') as log, \
+                patch.object(requests.Session, 'request',
+                             return_value=ok):
+            s.request('GET', 'http://x')
+            s.request('GET', 'http://y')
+        assert log.warning.call_count == 1
 
     def test_all_dead_no_direct_raises_last_error(self):
         s = self._session(proxies=['1.1.1.1:1'], max_fails=1,

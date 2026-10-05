@@ -28,11 +28,15 @@ RE_MIXED_DESCRIPTION = re.compile(
     flags=re.S
 )
 
+# Episode markers terminate the listing title, optionally followed by
+# 'rész' ('episode'); the lookahead keeps mid-title numbers and roman
+# numerals ('A 2. világháború', 'III. Richárd') from being mistaken for
+# episode info and truncating the real title.
 RE_SEASON_EPISODE = re.compile(
     r"((?=[MDCLXVI])M{0,4}(?:CM|CD|D?C{0,3})?(?:XC|XL|L?X{0,3})?"
-    r"(?:IX|IV|V?I{0,3})?)\.\/([0-9]+)\.")
+    r"(?:IX|IV|V?I{0,3})?)\.\/([0-9]+)\.(?=\s*(?:rész\.?)?\s*$)")
 RE_EPISODE_RANGE = re.compile(r"([0-9]+)\.-([0-9]+)\.")
-RE_SINGLE_EPISODE = re.compile(r"([0-9]+)\.")
+RE_SINGLE_EPISODE = re.compile(r"([0-9]+)\.(?=\s*(?:rész\.?)?\s*$)")
 
 
 class MusorTvMobile(EpgScraper):
@@ -135,9 +139,15 @@ class MusorTvMobile(EpgScraper):
         """Extracts cacheable fields from a program details page."""
         details = {'icon': None, 'orig_title': None, 'sub_titles': [],
                    'descs': [], 'directors': [], 'actors': []}
-        prg_icon = prg_details_page.select_one('img[itemprop="image"]')
-        if prg_icon:
-            details['icon'] = self._base_url + prg_icon.attrs['src']
+        # the program image moved to the og:image meta tag (absolute URL
+        # on the musor.tv domain); img[itemprop="image"] is kept as a
+        # fallback for older markup
+        og_image = prg_details_page.select_one('meta[property="og:image"]')
+        img = prg_details_page.select_one('img[itemprop="image"]')
+        src = og_image.get('content') if og_image else \
+            (img.get('src') if img else None)
+        if src:
+            details['icon'] = src if '://' in src else self._base_url + src
 
         desc_elem = prg_details_page.select_one('div.eventinfolongdescinner')
         if desc_elem is not None:
@@ -183,10 +193,10 @@ class MusorTvMobile(EpgScraper):
             if m0:
                 season = roman.fromRoman(m0.group(1))
                 episode = int(m0.group(2))
-                title = title.split(str(m0.group()))[0].strip()
+                title = title[:m0.start()].strip()
             if m2:
                 episode = int(m2.group(1))
-                title = title.split(str(m2.group()))[0].strip()
+                title = title[:m2.start()].strip()
             onscreen = f'S{season:02d}E{episode:02d}' if season > 0 else f'S--E{episode:02d}'
             xmltv_ns = f'{season - 1}.{episode - 1}.' if season > 0 else f'.{episode - 1}.'
             program.episode_num = [EpisodeNum(content=[onscreen], system='onscreen'),

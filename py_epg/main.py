@@ -23,7 +23,8 @@ from py_epg.common.xmltv_writer import write_file_from_xml
 from py_epg.common.epg_scraper import EpgScraper, UA
 from py_epg.common.metadata import build_metadata
 from py_epg.common.multiprocess_helper import setup_ltree_pickling
-from py_epg.common.proxy import ProxyPool, get_proxy_session
+from py_epg.common.proxy import (ProxyPool, format_proxy_stats,
+                                 get_proxy_session)
 from py_epg.common.requests import get_http_session
 from py_epg.common.types import ChannelKey
 from py_epg.common.utils import argparse_str2bool
@@ -82,11 +83,21 @@ class PyEPG:
                 self._log.error(f'Metadata pass failed: {e}')
             self._write_xmltv(tv)
         if isinstance(self._proxy, ProxyPool):
-            stats = self._proxy.stats()
+            self._log_proxy_report()
+
+    def _log_proxy_report(self):
+        # stats() includes benches shared through the stats DB, so the
+        # alive count covers what the worker pool copies saw - the
+        # parent process itself never makes requests
+        stats = self._proxy.stats()
+        self._log.info(
+            f"Proxy pool: {stats['alive']}/{stats['total']} proxies "
+            'alive at end of run')
+        rows = self._cache.proxy_stats()
+        if rows:
             self._log.info(
-                f"Proxy pool: {stats['alive']}/{stats['total']} proxies "
-                'alive at end of run (parent process stats; workers '
-                'maintain their own pools)')
+                'Proxy statistics (cumulative):\n'
+                + format_proxy_stats(rows))
 
     def _build_xmltv(self, data: Dict[ChannelKey, List[Programme]]):
         channels = []
@@ -468,14 +479,21 @@ class PyEPG:
             help="Print statistics for an XMLTV file and exit "
                  "(no config needed)")
         parser.add_argument(
+            "--proxy-stats", metavar='CACHE_DB', nargs='?',
+            const='-', default=None,
+            help="Print per-proxy statistics from the cache DB and exit "
+                 "(default: <cache file> from --config, or "
+                 "./epg_cache.sqlite)")
+        parser.add_argument(
             "--json", help="JSON output (with --stats). Default: False",
             default=False, type=argparse_str2bool, nargs='?', const=True)
         requiredArgs = parser.add_argument_group('required arguments')
         requiredArgs.add_argument(
             "-c", "--config", help="Path to py_epg.xml file")
         args = parser.parse_args()
-        if not args.stats and not args.config:
-            parser.error('one of -c/--config or --stats is required')
+        if not args.stats and not args.proxy_stats and not args.config:
+            parser.error('one of -c/--config, --stats or '
+                         '--proxy-stats is required')
 
         if args.quiet:
             args.progress_bar = False
@@ -498,6 +516,17 @@ def main(args=None):
     if cli_args.stats:
         from py_epg.stats import print_stats
         print_stats(cli_args.stats, json_out=cli_args.json)
+        return
+    if cli_args.proxy_stats:
+        from py_epg.common.proxy import print_proxy_stats
+        db = cli_args.proxy_stats
+        if db == '-':
+            db = 'epg_cache.sqlite'
+            if cli_args.config:
+                cfg = ET.parse(cli_args.config).find('cache')
+                if cfg is not None:
+                    db = cfg.attrib.get('file', db)
+        print_proxy_stats(db)
         return
     py_epg = PyEPG()
     py_epg.run()

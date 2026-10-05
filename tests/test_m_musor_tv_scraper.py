@@ -19,8 +19,8 @@ def make_scraper(cache=None, metadata=None):
     return s
 
 
-def make_programme():
-    return Programme(channel='CH', title=[Title(content=['Cím'])],
+def make_programme(title='Cím'):
+    return Programme(channel='CH', title=[Title(content=[title])],
                      clumpidx=None)
 
 
@@ -52,6 +52,26 @@ class TestSetPrgEpisodeInfo:
         nums = {n.system: n.content[0] for n in p.episode_num}
         assert nums['onscreen'] == 'S--E05'
         assert nums['xmltv_ns'] == '.4.'
+
+    @pytest.mark.parametrize('title', [
+        'A 2. világháború színesben',   # mid-title number is not an episode
+        'III. Richárd',                 # leading roman numeral is the name
+        '1979. évi film',               # year prefix
+    ])
+    def test_midtitle_number_is_not_episode(self, title):
+        s = make_scraper()
+        p = make_programme(title)
+        s._set_prg_episode_info(p, title)
+        assert not p.episode_num
+        assert p.title[0].content[0] == title
+
+    def test_full_title_preserved(self):
+        # regression: the episode marker strip must not eat title words
+        # ('A vadvilág jelképei I./5.' -> 'A vadvilág jelképei')
+        s = make_scraper()
+        p = make_programme()
+        s._set_prg_episode_info(p, 'A vadvilág jelképei I./5.')
+        assert p.title[0].content[0] == 'A vadvilág jelképei'
 
     def test_no_episode_info_untouched(self):
         s = make_scraper()
@@ -261,6 +281,15 @@ class TestParseProgramDetails:
         assert d['orig_title'] == 'Original'
         assert d['sub_titles'] == ['Alcím']
         assert d['descs'] == ['Leírás.']
+
+    def test_og_image_icon_is_absolute(self):
+        s = make_scraper()
+        page = soup(
+            '<html><meta property="og:image" '
+            'content="https://musor.tv/img/fb/1/p.jpg"/></html>')
+        d = s._parse_program_details(page)
+        # og:image is already absolute (musor.tv, not m.musor.tv)
+        assert d['icon'] == 'https://musor.tv/img/fb/1/p.jpg'
 
 
 class TestApplyProgramDetails:

@@ -13,6 +13,7 @@ from lxml import etree as ET
 from xmltv.models import (Category, Channel, Country, Desc, DisplayName,
                           Icon, Programme, Rating, SubTitle, Title)
 
+from py_epg.common.cache import Cache
 from py_epg.common.proxy import ProxyPool
 from py_epg.common.types import ChannelKey
 from py_epg.main import (PyEPG, _init_worker, _remove_console_handler,
@@ -26,6 +27,7 @@ def make_app(metadata=None, pool_size=1):
     app._args = SimpleNamespace(progress_bar=False, quiet=True)
     app._metadata = metadata
     app._pool_size = pool_size
+    app._cache = Cache(enabled=False)
 
     class FakePool:
         """Runs tasks synchronously, like imap_unordered does."""
@@ -599,6 +601,27 @@ class TestMain:
         main()
         assert 'CHANNELS' in capsys.readouterr().out
 
+    def test_proxy_stats_mode(self, tmp_path, monkeypatch, capsys):
+        db = tmp_path / 'cache.sqlite'
+        Cache(str(db)).record_proxy_result('1.2.3.4:8080', ok=True)
+        monkeypatch.setattr(
+            sys, 'argv', ['epg', '--proxy-stats', str(db)])
+        main()
+        assert '1.2.3.4:8080' in capsys.readouterr().out
+
+    def test_proxy_stats_default_db_from_config(
+            self, tmp_path, monkeypatch, capsys):
+        db = tmp_path / 'cache.sqlite'
+        Cache(str(db)).record_proxy_result('9.9.9.9:1', ok=False)
+        cfg = tmp_path / 'c.xml'
+        cfg.write_text(
+            f'<config><cache file="{db}"/></config>')
+        monkeypatch.setattr(
+            sys, 'argv', ['epg', '-c', str(cfg), '--proxy-stats'])
+        main()
+        out = capsys.readouterr().out
+        assert '9.9.9.9:1' in out and '1 failed' in out
+
     def test_stats_json(self, tmp_path, monkeypatch, capsys):
         import json
         epg = tmp_path / 'e.xml'
@@ -611,7 +634,7 @@ class TestMain:
     def test_normal_mode_builds_app(self, monkeypatch):
         cls = MagicMock()
         cls._parse_args.return_value = SimpleNamespace(
-            stats=None, config='c.xml')
+            stats=None, proxy_stats=None, config='c.xml')
         monkeypatch.setattr('py_epg.main.PyEPG', cls)
         monkeypatch.setattr(sys, 'argv', ['epg', '-c', 'c.xml'])
         main()
